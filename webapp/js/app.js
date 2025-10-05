@@ -17,6 +17,11 @@ class FinanceApp {
             dateFrom: null,
             dateTo: null
         };
+        
+        // AI Chat state
+        this.aiMessages = [];
+        this.isAITyping = false;
+        this.isFirstAIMessage = true;
 
         this.init();
     }
@@ -134,6 +139,9 @@ class FinanceApp {
                 break;
             case 'stats':
                 await this.loadStatistics();
+                break;
+            case 'ai-chat':
+                await this.loadAIChat();
                 break;
         }
     }
@@ -1117,6 +1125,229 @@ class FinanceApp {
         }
     }
 
+    // ==================== AI CHAT ====================
+
+    /**
+     * Load AI chat section
+     */
+    async loadAIChat() {
+        // Just show the section - messages are already there
+        console.log('AI Chat section loaded');
+    }
+
+    /**
+     * Send message to AI
+     */
+    async sendAIMessage() {
+        try {
+            const input = document.getElementById('aiInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            if (window.telegramApp) {
+                window.telegramApp.hapticImpact('light');
+            }
+            
+            // Clear input
+            input.value = '';
+            input.style.height = 'auto';
+            
+            // Disable send button
+            const sendBtn = document.getElementById('aiSendBtn');
+            if (sendBtn) sendBtn.disabled = true;
+            
+            // Add user message to UI
+            this.addAIMessage('user', message);
+            
+            // Show typing indicator
+            this.showAITyping();
+            
+            // Send to API
+            const response = await window.api.sendAIMessage(
+                message,
+                this.isFirstAIMessage
+            );
+            
+            // Mark that first message was sent
+            if (this.isFirstAIMessage) {
+                this.isFirstAIMessage = false;
+            }
+            
+            // Hide typing indicator
+            this.hideAITyping();
+            
+            // Add assistant response
+            if (response.response) {
+                this.addAIMessage('assistant', response.response);
+                
+                if (window.telegramApp) {
+                    window.telegramApp.hapticNotification('success');
+                }
+            } else {
+                throw new Error('Empty response from AI');
+            }
+            
+            // Enable send button
+            if (sendBtn) sendBtn.disabled = false;
+            
+        } catch (error) {
+            console.error('Send AI message error:', error);
+            this.hideAITyping();
+            
+            // Show error message
+            this.addAIMessage('assistant', 'Извините, произошла ошибка. Попробуйте еще раз.');
+            
+            // Enable send button
+            const sendBtn = document.getElementById('aiSendBtn');
+            if (sendBtn) sendBtn.disabled = false;
+            
+            if (window.telegramApp) {
+                window.telegramApp.hapticNotification('error');
+            }
+        }
+    }
+
+    /**
+     * Add message to chat
+     */
+    addAIMessage(role, text) {
+        const messagesContainer = document.getElementById('aiMessages');
+        if (!messagesContainer) return;
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `ai-message ${role}`;
+        
+        const avatar = role === 'user' ? '👤' : '🤖';
+        const now = new Date();
+        const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        
+        messageDiv.innerHTML = `
+            <div class="ai-message-avatar">${avatar}</div>
+            <div class="ai-message-content">
+                <div class="ai-message-text">${this.escapeHtml(text)}</div>
+                <div class="ai-message-time">${time}</div>
+            </div>
+        `;
+        
+        messagesContainer.appendChild(messageDiv);
+        
+        // Scroll to bottom
+        this.scrollAIToBottom();
+        
+        // Store message
+        this.aiMessages.push({ role, text, time: now });
+    }
+
+    /**
+     * Show typing indicator
+     */
+    showAITyping() {
+        const indicator = document.getElementById('aiTyping');
+        if (indicator) {
+            indicator.style.display = 'block';
+            this.scrollAIToBottom();
+        }
+        this.isAITyping = true;
+    }
+
+    /**
+     * Hide typing indicator
+     */
+    hideAITyping() {
+        const indicator = document.getElementById('aiTyping');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        this.isAITyping = false;
+    }
+
+    /**
+     * Scroll chat to bottom
+     */
+    scrollAIToBottom() {
+        setTimeout(() => {
+            const messagesContainer = document.getElementById('aiMessages');
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }, 100);
+    }
+
+    /**
+     * Reset AI chat
+     */
+    async resetAIChat() {
+        try {
+            const confirmed = await this.showConfirm('Начать новый разговор? Вся история будет удалена.');
+            if (!confirmed) return;
+            
+            if (window.telegramApp) {
+                window.telegramApp.hapticImpact('medium');
+            }
+            
+            // Reset on backend
+            await window.api.resetAIConversation();
+            
+            // Clear messages
+            const messagesContainer = document.getElementById('aiMessages');
+            if (messagesContainer) {
+                messagesContainer.innerHTML = `
+                    <div class="ai-message assistant">
+                        <div class="ai-message-avatar">🤖</div>
+                        <div class="ai-message-content">
+                            <div class="ai-message-text">
+                                Привет! Я твой AI-помощник по финансам. 
+                                Я знаю все твои транзакции и готов помочь с оптимизацией расходов и доходов. 
+                                Задай мне любой вопрос! 📊
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Reset state
+            this.aiMessages = [];
+            this.isFirstAIMessage = true;
+            
+            this.showSuccess('Чат сброшен');
+            
+            if (window.telegramApp) {
+                window.telegramApp.hapticNotification('success');
+            }
+            
+        } catch (error) {
+            console.error('Reset AI chat error:', error);
+            this.showError('Ошибка при сбросе чата');
+        }
+    }
+
+    /**
+     * Handle input keydown
+     */
+    handleAIInputKeydown(event) {
+        // Send on Enter (without Shift)
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            this.sendAIMessage();
+            return;
+        }
+        
+        // Auto-resize textarea
+        const textarea = event.target;
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    }
+
+    /**
+     * Escape HTML
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     // ==================== HELPERS ====================
 
     /**
@@ -1272,6 +1503,18 @@ function saveTransaction(event) {
 
 function deleteTransaction() {
     window.app.deleteTransaction();
+}
+
+function sendAIMessage() {
+    window.app.sendAIMessage();
+}
+
+function resetAIChat() {
+    window.app.resetAIChat();
+}
+
+function handleAIInputKeydown(event) {
+    window.app.handleAIInputKeydown(event);
 }
 
 console.log('App.js loaded');
