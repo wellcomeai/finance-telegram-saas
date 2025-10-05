@@ -23,7 +23,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
 
 def transaction_confirmation_keyboard() -> InlineKeyboardMarkup:
     """
-    Keyboard for transaction confirmation
+    Keyboard for transaction confirmation (одиночная транзакция)
     """
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -33,6 +33,23 @@ def transaction_confirmation_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text=BotButtons.CANCEL, callback_data="transaction_cancel")
+            ]
+        ]
+    )
+    return keyboard
+
+
+def multiple_transactions_confirmation_keyboard() -> InlineKeyboardMarkup:
+    """
+    Keyboard for multiple transactions confirmation (множественные транзакции)
+    """
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=BotButtons.SAVE_ALL, callback_data="transactions_save_all")
+            ],
+            [
+                InlineKeyboardButton(text=BotButtons.CANCEL, callback_data="transactions_cancel_all")
             ]
         ]
     )
