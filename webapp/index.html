@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Finance Tracker</title>
     
     <!-- Telegram Web App API -->
@@ -46,6 +46,12 @@
             --gradient-red: linear-gradient(135deg, #ff3b30 0%, #ff6961 100%);
             --gradient-purple: linear-gradient(135deg, #bf5af2 0%, #af52de 100%);
             --gradient-orange: linear-gradient(135deg, #ff9500 0%, #ffb340 100%);
+            
+            /* Safe Area */
+            --sat: env(safe-area-inset-top);
+            --sar: env(safe-area-inset-right);
+            --sab: env(safe-area-inset-bottom);
+            --sal: env(safe-area-inset-left);
         }
 
         [data-theme="dark"] {
@@ -71,17 +77,18 @@
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-secondary);
             color: var(--text-primary);
-            padding-bottom: 80px;
+            padding-bottom: calc(80px + var(--sab));
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             transition: background-color 0.3s ease;
+            touch-action: pan-y;
         }
 
         /* Header */
         .header {
             background: var(--card-bg);
-            padding: 16px 20px;
+            padding: calc(16px + var(--sat)) 20px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -531,7 +538,7 @@
         /* Add Transaction Button */
         .add-btn-container {
             position: fixed;
-            bottom: 100px;
+            bottom: calc(100px + var(--sab));
             right: 20px;
             z-index: 100;
         }
@@ -570,7 +577,7 @@
             border-top: 1px solid var(--border-color);
             display: flex;
             justify-content: space-around;
-            padding: 8px 0;
+            padding: calc(8px + var(--sab)) 0 var(--sab);
             z-index: 1000;
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -614,7 +621,7 @@
             transform: scale(0.9);
         }
 
-        /* Modal */
+        /* Modal - Bottom Sheet Style */
         .modal {
             display: none;
             position: fixed;
@@ -622,58 +629,102 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: var(--modal-overlay);
             z-index: 2000;
-            overflow-y: auto;
-            animation: fadeInModal 0.3s ease;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            overflow: hidden;
         }
 
         .modal.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: block;
         }
 
-        @keyframes fadeInModal {
+        .modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--modal-overlay);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            animation: fadeInBackdrop 0.3s ease;
+            cursor: pointer;
+        }
+
+        @keyframes fadeInBackdrop {
             from { opacity: 0; }
             to { opacity: 1; }
         }
 
         .modal-content {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
             background: var(--card-bg);
-            margin: 20px;
-            width: 100%;
-            max-width: 500px;
-            border-radius: 24px;
-            padding: 28px;
-            animation: slideUpModal 0.4s ease;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border-radius: 24px 24px 0 0;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            animation: slideUpModal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 -10px 60px rgba(0, 0, 0, 0.3);
+            padding-bottom: var(--sab);
         }
 
         @keyframes slideUpModal {
             from {
-                transform: translateY(50px);
-                opacity: 0;
+                transform: translateY(100%);
             }
             to {
                 transform: translateY(0);
-                opacity: 1;
             }
         }
 
+        .modal.closing .modal-backdrop {
+            animation: fadeOutBackdrop 0.3s ease forwards;
+        }
+
+        .modal.closing .modal-content {
+            animation: slideDownModal 0.3s ease forwards;
+        }
+
+        @keyframes fadeOutBackdrop {
+            to { opacity: 0; }
+        }
+
+        @keyframes slideDownModal {
+            to { transform: translateY(100%); }
+        }
+
         .modal-header {
+            position: sticky;
+            top: 0;
+            background: var(--card-bg);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 1;
+            border-radius: 24px 24px 0 0;
+        }
+
+        .modal-header::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 4px;
+            background: var(--border-color);
+            border-radius: 2px;
         }
 
         .modal-header h2 {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
             letter-spacing: -0.5px;
+            margin-top: 8px;
         }
 
         .close-btn {
@@ -694,6 +745,14 @@
 
         .close-btn:active {
             transform: scale(0.9);
+        }
+
+        .modal-body {
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1;
+            padding: 24px;
+            -webkit-overflow-scrolling: touch;
         }
 
         /* Form */
@@ -734,7 +793,8 @@
 
         .form-textarea {
             resize: vertical;
-            min-height: 100px;
+            min-height: 80px;
+            max-height: 150px;
         }
 
         /* Type Toggle */
@@ -850,13 +910,13 @@
         /* Category Grid */
         .category-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             margin-bottom: 20px;
         }
 
         .category-item {
-            padding: 16px 12px;
+            padding: 20px 16px;
             background: var(--bg-secondary);
             border: 2px solid transparent;
             border-radius: 14px;
@@ -876,8 +936,8 @@
         }
 
         .category-item .icon {
-            font-size: 28px;
-            margin-bottom: 8px;
+            font-size: 32px;
+            margin-bottom: 10px;
             display: inline-block;
             transition: transform 0.3s ease;
         }
@@ -887,7 +947,7 @@
         }
 
         .category-item .name {
-            font-size: 12px;
+            font-size: 13px;
             color: var(--text-secondary);
             font-weight: 500;
         }
@@ -897,7 +957,7 @@
             font-weight: 600;
         }
 
-        /* Loading Spinner (для совместимости, если где-то осталось) */
+        /* Loading Spinner */
         .loading {
             display: none;
             text-align: center;
@@ -924,22 +984,89 @@
         }
 
         /* Responsive */
+        @media (min-width: 500px) {
+            .category-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .category-item .icon {
+                font-size: 28px;
+            }
+            
+            .category-item {
+                padding: 16px 12px;
+            }
+            
+            .category-item .name {
+                font-size: 12px;
+            }
+        }
+
         @media (max-width: 380px) {
             .balance-amount {
                 font-size: 40px;
             }
+            
             .quick-stats {
                 grid-template-columns: repeat(3, 1fr);
                 gap: 8px;
             }
-            .category-grid {
-                grid-template-columns: repeat(3, 1fr);
+            
+            .header-left h1 {
+                font-size: 24px;
+            }
+            
+            .section-title {
+                font-size: 20px;
+            }
+            
+            .modal-header h2 {
+                font-size: 20px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .balance-amount {
+                font-size: 36px;
+            }
+            
+            .stat-value {
+                font-size: 20px;
+            }
+            
+            .quick-stat-icon {
+                font-size: 24px;
+            }
+            
+            .quick-stat-value {
+                font-size: 16px;
+            }
+            
+            .category-item .icon {
+                font-size: 28px;
+            }
+            
+            .category-item {
+                padding: 16px 12px;
+            }
+            
+            .form-input,
+            .form-select,
+            .form-textarea {
+                font-size: 15px;
+                padding: 12px 14px;
             }
         }
 
         /* Smooth scroll */
         html {
             scroll-behavior: smooth;
+        }
+
+        /* Prevent body scroll when modal is open */
+        body.modal-open {
+            overflow: hidden;
+            touch-action: none;
         }
     </style>
 </head>
@@ -1131,6 +1258,7 @@
 
     <!-- Add/Edit Transaction Modal -->
     <div id="transactionModal" class="modal">
+        <div class="modal-backdrop" onclick="closeModal()"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalTitle">Новая транзакция</h2>
@@ -1139,50 +1267,52 @@
                 </button>
             </div>
             
-            <div class="type-toggle">
-                <button class="type-btn expense active" onclick="selectType('expense')">
-                    💸 Расход
-                </button>
-                <button class="type-btn income" onclick="selectType('income')">
-                    💰 Доход
-                </button>
-            </div>
-
-            <form id="transactionForm" onsubmit="saveTransaction(event)">
-                <input type="hidden" id="transactionId" value="">
-                <input type="hidden" id="transactionType" value="expense">
-
-                <div class="form-group">
-                    <label class="form-label">Сумма *</label>
-                    <input type="number" id="amount" class="form-input" placeholder="0.00" step="0.01" required>
+            <div class="modal-body">
+                <div class="type-toggle">
+                    <button class="type-btn expense active" onclick="selectType('expense')">
+                        💸 Расход
+                    </button>
+                    <button class="type-btn income" onclick="selectType('income')">
+                        💰 Доход
+                    </button>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Категория *</label>
-                    <div id="categoryGrid" class="category-grid">
-                        <!-- Categories will be inserted here -->
+                <form id="transactionForm" onsubmit="saveTransaction(event)">
+                    <input type="hidden" id="transactionId" value="">
+                    <input type="hidden" id="transactionType" value="expense">
+
+                    <div class="form-group">
+                        <label class="form-label">Сумма *</label>
+                        <input type="number" id="amount" class="form-input" placeholder="0.00" step="0.01" required>
                     </div>
-                    <input type="hidden" id="categoryId" required>
-                </div>
 
-                <div class="form-group">
-                    <label class="form-label">Описание</label>
-                    <textarea id="description" class="form-textarea" placeholder="Добавьте описание..."></textarea>
-                </div>
+                    <div class="form-group">
+                        <label class="form-label">Категория *</label>
+                        <div id="categoryGrid" class="category-grid">
+                            <!-- Categories will be inserted here -->
+                        </div>
+                        <input type="hidden" id="categoryId" required>
+                    </div>
 
-                <div class="form-group">
-                    <label class="form-label">Дата</label>
-                    <input type="date" id="transactionDate" class="form-input" required>
-                </div>
+                    <div class="form-group">
+                        <label class="form-label">Описание</label>
+                        <textarea id="description" class="form-textarea" placeholder="Добавьте описание..."></textarea>
+                    </div>
 
-                <button type="submit" class="submit-btn">
-                    <i class="fas fa-check"></i> Сохранить
-                </button>
+                    <div class="form-group">
+                        <label class="form-label">Дата</label>
+                        <input type="date" id="transactionDate" class="form-input" required>
+                    </div>
 
-                <button type="button" id="deleteBtn" class="delete-btn" style="display: none;" onclick="deleteTransaction()">
-                    <i class="fas fa-trash"></i> Удалить
-                </button>
-            </form>
+                    <button type="submit" class="submit-btn">
+                        <i class="fas fa-check"></i> Сохранить
+                    </button>
+
+                    <button type="button" id="deleteBtn" class="delete-btn" style="display: none;" onclick="deleteTransaction()">
+                        <i class="fas fa-trash"></i> Удалить
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -1247,6 +1377,56 @@
         window.getCurrentDateFilter = function() {
             return currentDateFilter;
         };
+
+        // Modal Management
+        function openAddModal() {
+            const modal = document.getElementById('transactionModal');
+            document.body.classList.add('modal-open');
+            modal.classList.remove('closing');
+            modal.classList.add('active');
+            
+            // Scroll modal to top
+            const modalBody = modal.querySelector('.modal-body');
+            if (modalBody) {
+                modalBody.scrollTop = 0;
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('transactionModal');
+            modal.classList.add('closing');
+            
+            setTimeout(() => {
+                modal.classList.remove('active', 'closing');
+                document.body.classList.remove('modal-open');
+            }, 300);
+        }
+
+        // Handle input focus - scroll into view
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('.form-input, .form-textarea, .form-select');
+            
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    setTimeout(() => {
+                        const modal = this.closest('.modal');
+                        if (modal) {
+                            const modalBody = modal.querySelector('.modal-body');
+                            const inputRect = this.getBoundingClientRect();
+                            const modalRect = modalBody.getBoundingClientRect();
+                            
+                            if (inputRect.bottom > modalRect.bottom - 50) {
+                                const scrollAmount = inputRect.bottom - modalRect.bottom + 100;
+                                modalBody.scrollBy({
+                                    top: scrollAmount,
+                                    behavior: 'smooth'
+                                });
+                            }
+                        }
+                    }, 300);
+                });
+            });
+        });
 
         // Swipe to delete functionality
         let touchStartX = 0;
@@ -1325,6 +1505,57 @@
             element.addEventListener('touchstart', (e) => handleSwipeStart(e, element));
             element.addEventListener('touchmove', (e) => handleSwipeMove(e, element));
             element.addEventListener('touchend', (e) => handleSwipeEnd(e, element, transactionId));
+        };
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('transactionModal');
+                if (modal.classList.contains('active')) {
+                    closeModal();
+                }
+            }
+        });
+
+        // Prevent scroll when modal is open on iOS
+        let scrollPosition = 0;
+
+        function preventScroll() {
+            scrollPosition = window.pageYOffset;
+            document.body.style.overflow = 'hidden';
+            document.body.style.position = 'fixed';
+            document.body.style.top = `-${scrollPosition}px`;
+            document.body.style.width = '100%';
+        }
+
+        function allowScroll() {
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('position');
+            document.body.style.removeProperty('top');
+            document.body.style.removeProperty('width');
+            window.scrollTo(0, scrollPosition);
+        }
+
+        // Override openAddModal and closeModal to use scroll prevention
+        const originalOpenAddModal = window.openAddModal || openAddModal;
+        const originalCloseModal = window.closeModal || closeModal;
+
+        window.openAddModal = function() {
+            preventScroll();
+            if (originalOpenAddModal) {
+                originalOpenAddModal();
+            } else {
+                openAddModal();
+            }
+        };
+
+        window.closeModal = function() {
+            allowScroll();
+            if (originalCloseModal) {
+                originalCloseModal();
+            } else {
+                closeModal();
+            }
         };
     </script>
 </body>
