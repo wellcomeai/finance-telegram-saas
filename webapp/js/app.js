@@ -1225,7 +1225,7 @@ class FinanceApp {
         messageDiv.innerHTML = `
             <div class="ai-message-avatar">${avatar}</div>
             <div class="ai-message-content">
-                <div class="ai-message-text">${this.escapeHtml(text)}</div>
+                <div class="ai-message-text">${text}</div>
                 <div class="ai-message-time">${time}</div>
             </div>
         `;
@@ -1296,11 +1296,7 @@ class FinanceApp {
                     <div class="ai-message assistant">
                         <div class="ai-message-avatar">🤖</div>
                         <div class="ai-message-content">
-                            <div class="ai-message-text">
-                                Привет! Я твой AI-помощник по финансам. 
-                                Я знаю все твои транзакции и готов помочь с оптимизацией расходов и доходов. 
-                                Задай мне любой вопрос! 📊
-                            </div>
+                            <div class="ai-message-text">Привет! Я помогу с финансами 📊<br><br>Можешь спросить:<br>• Сколько я потратил?<br>• Куда уходят деньги?<br>• Советы по экономии</div>
                         </div>
                     </div>
                 `;
@@ -1340,7 +1336,8 @@ class FinanceApp {
     }
 
     /**
-     * Escape HTML
+     * Escape HTML - БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ для AI сообщений
+     * Оставлено для обратной совместимости
      */
     escapeHtml(text) {
         const div = document.createElement('div');
