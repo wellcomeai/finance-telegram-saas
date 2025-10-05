@@ -68,3 +68,29 @@ class Transaction:
     def __str__(self) -> str:
         type_emoji = "💸" if self.type == "expense" else "💰"
         return f"{type_emoji} {self.formatted_amount} - {self.description}"
+
+
+@dataclass
+class AgentConfig:
+    """Agent configuration model"""
+    id: int
+    config_key: str
+    system_prompt: str
+    model: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    def __str__(self) -> str:
+        return f"AgentConfig({self.config_key}, model={self.model})"
+
+
+@dataclass
+class AgentSession:
+    """Agent session model (stores only response_id for context)"""
+    user_id: int
+    response_id: str
+    updated_at: datetime
+    
+    def __str__(self) -> str:
+        return f"AgentSession(user={self.user_id}, response_id={self.response_id[:20]}...)"
