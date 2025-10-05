@@ -31,9 +31,18 @@ async def process_receipt_image(image_path: str) -> Optional[Dict]:
         logger.info(f"Processing receipt image: {image_path}")
         
         # Check file exists
-        if not Path(image_path).exists():
+        file_path = Path(image_path)
+        if not file_path.exists():
             logger.error(f"Image file not found: {image_path}")
             return None
+        
+        # Check file size
+        file_size = file_path.stat().st_size
+        if file_size > 20 * 1024 * 1024:  # 20MB limit
+            logger.error(f"Image file too large: {file_size} bytes")
+            return None
+        
+        logger.info(f"Image file size: {file_size} bytes")
         
         # Read and encode image
         with open(image_path, 'rb') as image_file:
@@ -80,6 +89,9 @@ async def process_receipt_image(image_path: str) -> Optional[Dict]:
         # Convert to transaction format
         transaction_data = await _receipt_to_transaction(receipt_data)
         
+        if transaction_data:
+            logger.info(f"Successfully processed receipt: {transaction_data['amount']} ₽")
+        
         return transaction_data
         
     except Exception as e:
@@ -93,9 +105,14 @@ def _parse_receipt_json(text: str) -> Optional[Dict]:
         # Remove markdown if present
         text = text.strip()
         if text.startswith('```'):
-            text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+            # Remove ```json or ```
+            lines = text.split('\n')
+            if lines[0].strip().startswith('```'):
+                text = '\n'.join(lines[1:])
         if text.endswith('```'):
-            text = text.rsplit('\n', 1)[0] if '\n' in text else text[:-3]
+            lines = text.split('\n')
+            if lines[-1].strip() == '```':
+                text = '\n'.join(lines[:-1])
         
         text = text.strip()
         
@@ -110,6 +127,7 @@ def _parse_receipt_json(text: str) -> Optional[Dict]:
         
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode error: {e}")
+        logger.error(f"Text was: {text}")
         return None
     except Exception as e:
         logger.error(f"Error parsing receipt JSON: {e}")
@@ -144,6 +162,7 @@ async def _receipt_to_transaction(receipt_data: Dict) -> Optional[Dict]:
             try:
                 transaction_date = datetime.strptime(date_str, '%Y-%m-%d').date()
             except ValueError:
+                logger.warning(f"Invalid date format: {date_str}, using today")
                 transaction_date = datetime.now().date()
         else:
             transaction_date = datetime.now().date()
@@ -165,7 +184,7 @@ async def _receipt_to_transaction(receipt_data: Dict) -> Optional[Dict]:
         return result
         
     except Exception as e:
-        logger.error(f"Error converting receipt to transaction: {e}")
+        logger.error(f"Error converting receipt to transaction: {e}", exc_info=True)
         return None
 
 
@@ -183,9 +202,12 @@ async def download_photo_file(bot, file_id: str, destination: str) -> bool:
     """
     try:
         file = await bot.get_file(file_id)
+        logger.info(f"Downloading photo: {file.file_path}, size: {file.file_size} bytes")
+        
         await bot.download_file(file.file_path, destination)
         logger.info(f"Photo downloaded to {destination}")
         return True
+        
     except Exception as e:
-        logger.error(f"Error downloading photo: {e}")
+        logger.error(f"Error downloading photo: {e}", exc_info=True)
         return False
