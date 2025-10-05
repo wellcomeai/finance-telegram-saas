@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from telegram_bot.config import BotMessages
-from telegram_bot.keyboards import transaction_confirmation_keyboard
+from telegram_bot.keyboards import transaction_confirmation_keyboard, multiple_transactions_confirmation_keyboard
 from ai.text_parser import parse_transaction_text
 from database.repositories.transaction_repo import TransactionRepository
 from database.repositories.category_repo import CategoryRepository
@@ -22,7 +22,8 @@ router = Router()
 
 class TransactionStates(StatesGroup):
     """States for transaction creation"""
-    waiting_confirmation = State()
+    waiting_confirmation = State()  # Для одиночной транзакции
+    waiting_multiple_confirmation = State()  # Для множественных транзакций
     editing = State()
 
 
@@ -106,61 +107,51 @@ async def handle_text_message(message: Message, state: FSMContext, db_user):
                 reply_markup=transaction_confirmation_keyboard()
             )
         
-        # ========== НЕСКОЛЬКО ТРАНЗАКЦИЙ - автосохранение ==========
+        # ========== НЕСКОЛЬКО ТРАНЗАКЦИЙ - показываем подтверждение для всех ==========
         else:
-            saved_count = 0
-            failed_count = 0
-            summary_lines = []
+            # Save to state
+            await state.set_state(TransactionStates.waiting_multiple_confirmation)
+            await state.update_data(
+                transactions=transactions,
+                user_id=db_user.id
+            )
             
-            logger.info(f"Processing {len(transactions)} transactions for user {db_user.id}")
-            
-            # Сохраняем каждую транзакцию
+            # Формируем список транзакций для отображения
+            transactions_list = []
             for idx, transaction_data in enumerate(transactions, 1):
-                success = await _save_transaction_to_db(transaction_data, db_user.id)
+                type_emoji = "💸" if transaction_data['type'] == 'expense' else "💰"
+                amount_formatted = f"{transaction_data['amount']:,.0f}".replace(",", " ")
                 
-                if success:
-                    saved_count += 1
-                    
-                    # Формируем строку для сводки
-                    type_emoji = "💸" if transaction_data['type'] == 'expense' else "💰"
-                    amount_formatted = f"{transaction_data['amount']:,.0f}".replace(",", " ")
-                    
-                    summary_lines.append(
-                        f"{idx}. {type_emoji} {transaction_data['category_icon']} "
-                        f"<b>{transaction_data['description']}</b> - {amount_formatted} ₽"
-                    )
-                else:
-                    failed_count += 1
-                    logger.error(f"Failed to save transaction {idx}: {transaction_data}")
-            
-            # Формируем итоговое сообщение
-            if saved_count > 0:
-                summary_text = f"✅ <b>Сохранено транзакций: {saved_count}</b>\n\n"
-                summary_text += "\n".join(summary_lines)
-                
-                if failed_count > 0:
-                    summary_text += f"\n\n⚠️ Не удалось сохранить: {failed_count}"
-                
-                # Показываем общую сумму для расходов/доходов
-                total_expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
-                total_income = sum(t['amount'] for t in transactions if t['type'] == 'income')
-                
-                summary_text += "\n\n<b>Итого:</b>\n"
-                if total_expenses > 0:
-                    summary_text += f"💸 Расходы: {total_expenses:,.0f} ₽\n".replace(",", " ")
-                if total_income > 0:
-                    summary_text += f"💰 Доходы: {total_income:,.0f} ₽\n".replace(",", " ")
-                
-                await processing_msg.edit_text(summary_text)
-            else:
-                # Все транзакции провалились
-                await processing_msg.edit_text(
-                    "❌ Не удалось сохранить транзакции.\n"
-                    "Попробуйте еще раз или обратитесь в поддержку."
+                transactions_list.append(
+                    f"{idx}. {type_emoji} {transaction_data['category_icon']} "
+                    f"<b>{transaction_data['description']}</b> - {amount_formatted} ₽"
                 )
             
-            # Очищаем state (не нужен для множественных транзакций)
-            await state.clear()
+            # Считаем общие суммы
+            total_expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
+            total_income = sum(t['amount'] for t in transactions if t['type'] == 'income')
+            
+            totals_parts = []
+            if total_expenses > 0:
+                totals_parts.append(f"💸 Расходы: {total_expenses:,.0f} ₽".replace(",", " "))
+            if total_income > 0:
+                totals_parts.append(f"💰 Доходы: {total_income:,.0f} ₽".replace(",", " "))
+            
+            totals_text = "\n".join(totals_parts)
+            
+            # Формируем итоговое сообщение
+            confirmation_text = BotMessages.MULTIPLE_TRANSACTIONS_CONFIRM.format(
+                count=len(transactions),
+                transactions_list="\n".join(transactions_list),
+                totals=totals_text
+            )
+            
+            await processing_msg.edit_text(
+                confirmation_text,
+                reply_markup=multiple_transactions_confirmation_keyboard()
+            )
+            
+            logger.info(f"Showing confirmation for {len(transactions)} transactions to user {db_user.id}")
         
     except Exception as e:
         logger.error(f"Error handling text message: {e}", exc_info=True)
@@ -196,12 +187,70 @@ async def save_transaction(callback: CallbackQuery, state: FSMContext):
         await callback.answer(BotMessages.ERROR, show_alert=True)
 
 
+@router.callback_query(F.data == "transactions_save_all")
+async def save_all_transactions(callback: CallbackQuery, state: FSMContext):
+    """
+    Save all transactions to database (для множественных транзакций)
+    """
+    data = await state.get_data()
+    transactions = data.get('transactions')
+    user_id = data.get('user_id')
+    
+    if not transactions or not user_id:
+        await callback.answer("Ошибка: данные не найдены")
+        return
+    
+    try:
+        saved_count = 0
+        failed_count = 0
+        
+        logger.info(f"Saving {len(transactions)} transactions for user {user_id}")
+        
+        # Сохраняем каждую транзакцию
+        for transaction_data in transactions:
+            success = await _save_transaction_to_db(transaction_data, user_id)
+            if success:
+                saved_count += 1
+            else:
+                failed_count += 1
+        
+        # Формируем итоговое сообщение
+        if saved_count > 0:
+            message_text = BotMessages.TRANSACTIONS_SAVED.format(count=saved_count)
+            
+            if failed_count > 0:
+                message_text += f"\n\n⚠️ Не удалось сохранить: {failed_count}"
+            
+            await callback.message.edit_text(message_text)
+            await state.clear()
+            await callback.answer()
+        else:
+            await callback.answer(
+                "Не удалось сохранить транзакции. Попробуйте еще раз.",
+                show_alert=True
+            )
+        
+    except Exception as e:
+        logger.error(f"Error in save_all_transactions callback: {e}", exc_info=True)
+        await callback.answer(BotMessages.ERROR, show_alert=True)
+
+
 @router.callback_query(F.data == "transaction_cancel")
 async def cancel_transaction(callback: CallbackQuery, state: FSMContext):
     """
-    Cancel transaction creation
+    Cancel single transaction creation
     """
     await callback.message.edit_text(BotMessages.TRANSACTION_CANCELLED)
+    await state.clear()
+    await callback.answer()
+
+
+@router.callback_query(F.data == "transactions_cancel_all")
+async def cancel_all_transactions(callback: CallbackQuery, state: FSMContext):
+    """
+    Cancel all transactions creation
+    """
+    await callback.message.edit_text(BotMessages.TRANSACTIONS_CANCELLED)
     await state.clear()
     await callback.answer()
 
