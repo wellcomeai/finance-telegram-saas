@@ -13,26 +13,68 @@ from telegram_bot.config import BotMessages
 from telegram_bot.keyboards import transaction_confirmation_keyboard
 from ai.image_processor import process_receipt_image, download_photo_file
 from telegram_bot.handlers.text_handler import TransactionStates
+from database.repositories.transaction_repo import TransactionRepository
+from database.repositories.category_repo import CategoryRepository
+from database.connection import get_db_connection
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
+async def _save_transaction_to_db(transaction_data: dict, user_id: int) -> bool:
+    """
+    Вспомогательная функция для сохранения транзакции в БД
+    
+    Returns:
+        True если успешно сохранено, False в случае ошибки
+    """
+    try:
+        async with get_db_connection() as conn:
+            transaction_repo = TransactionRepository(conn)
+            category_repo = CategoryRepository(conn)
+            
+            # Get category ID
+            category = await category_repo.get_by_name(transaction_data['category_name'])
+            
+            # Create transaction
+            await transaction_repo.create(
+                user_id=user_id,
+                transaction_type=transaction_data['type'],
+                amount=transaction_data['amount'],
+                category_id=category.id if category else None,
+                description=transaction_data['description'],
+                transaction_date=transaction_data.get('date', datetime.now().date())
+            )
+            
+            logger.info(f"Transaction saved: {transaction_data['type']} {transaction_data['amount']} ₽")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error saving transaction to DB: {e}", exc_info=True)
+        return False
+
+
 @router.message(F.photo)
 async def handle_photo_message(message: Message, state: FSMContext, db_user):
     """
     Handle photo messages from user (receipts)
+    Чеки обычно содержат одну транзакцию, но код готов к расширению
     """
     processing_msg = await message.answer(BotMessages.PROCESSING)
     
     temp_file = None
+    temp_path = None
     
     try:
         # Get the largest photo (best quality)
         photo = message.photo[-1]  # Последнее фото = наибольшее разрешение
         
-        logger.info(f"Photo from user {db_user.id}, size: {photo.width}x{photo.height}, file_size: {photo.file_size}")
+        logger.info(
+            f"Photo from user {db_user.id}, "
+            f"size: {photo.width}x{photo.height}, "
+            f"file_size: {photo.file_size} bytes"
+        )
         
         # Create temp file for photo
         temp_file = tempfile.NamedTemporaryFile(
@@ -55,6 +97,7 @@ async def handle_photo_message(message: Message, state: FSMContext, db_user):
             return
         
         # Process receipt image with Vision AI
+        # Возвращает Optional[Dict] - одну транзакцию
         transaction_data = await process_receipt_image(temp_path)
         
         if transaction_data is None:
@@ -63,9 +106,14 @@ async def handle_photo_message(message: Message, state: FSMContext, db_user):
                 "Попробуйте:\n"
                 "• Сделать фото чётче\n"
                 "• Убедиться что чек полностью в кадре\n"
-                "• Улучшить освещение"
+                "• Улучшить освещение\n"
+                "• Отправить PDF или написать текстом"
             )
             return
+        
+        # ========== ПОКАЗЫВАЕМ ПОДТВЕРЖДЕНИЕ ==========
+        # Для чеков всегда показываем подтверждение (даже если это одна транзакция)
+        # чтобы пользователь мог проверить корректность распознавания
         
         # Save to state
         await state.set_state(TransactionStates.waiting_confirmation)
@@ -85,7 +133,7 @@ async def handle_photo_message(message: Message, state: FSMContext, db_user):
             category_icon=transaction_data['category_icon'],
             category_name=transaction_data['category_name'],
             description=transaction_data['description'],
-            date=transaction_data['date'].strftime('%d.%m.%Y') if hasattr(transaction_data['date'], 'strftime') else transaction_data['date']
+            date=transaction_data['date'].strftime('%d.%m.%Y') if hasattr(transaction_data['date'], 'strftime') else str(transaction_data['date'])
         )
         
         await processing_msg.edit_text(
@@ -93,15 +141,26 @@ async def handle_photo_message(message: Message, state: FSMContext, db_user):
             reply_markup=transaction_confirmation_keyboard()
         )
         
+        logger.info(
+            f"Receipt processed for user {db_user.id}: "
+            f"{transaction_data['amount']} ₽ - {transaction_data['description']}"
+        )
+        
     except Exception as e:
         logger.error(f"Error handling photo message: {e}", exc_info=True)
-        await processing_msg.edit_text(BotMessages.ERROR)
+        await processing_msg.edit_text(
+            "❌ Произошла ошибка при обработке фото.\n\n"
+            "Попробуйте:\n"
+            "• Отправить другое фото\n"
+            "• Отправить PDF чека\n"
+            "• Написать транзакцию текстом"
+        )
     
     finally:
         # Cleanup temp file
-        if temp_file and os.path.exists(temp_path):
+        if temp_path and os.path.exists(temp_path):
             try:
                 os.unlink(temp_path)
-                logger.info(f"Temp file deleted: {temp_path}")
+                logger.info(f"Temp photo file deleted: {temp_path}")
             except Exception as e:
-                logger.error(f"Error deleting temp file: {e}")
+                logger.error(f"Error deleting temp photo file: {e}")
