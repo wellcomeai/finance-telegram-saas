@@ -173,25 +173,13 @@
     <!-- AI Chat Section -->
     <div id="ai-chat" class="section">
         <div class="ai-chat-container">
-            <!-- Header -->
-            <div class="ai-chat-header">
-                <h2 class="section-title">💬 AI Помощник</h2>
-                <button class="reset-chat-btn" onclick="resetAIChat()">
-                    <i class="fas fa-refresh"></i>
-                </button>
-            </div>
-
             <!-- Messages Container -->
             <div class="ai-messages" id="aiMessages">
                 <!-- Welcome message -->
                 <div class="ai-message assistant">
                     <div class="ai-message-avatar">🤖</div>
                     <div class="ai-message-content">
-                        <div class="ai-message-text">
-                            Привет! Я твой AI-помощник по финансам. 
-                            Я знаю все твои транзакции и готов помочь с оптимизацией расходов и доходов. 
-                            Задай мне любой вопрос! 📊
-                        </div>
+                        <div class="ai-message-text">Привет! Я помогу с финансами 📊<br><br>Можешь спросить:<br>• Сколько я потратил?<br>• Куда уходят деньги?<br>• Советы по экономии</div>
                     </div>
                 </div>
             </div>
@@ -213,6 +201,9 @@
             <!-- Input -->
             <div class="ai-chat-input-container">
                 <div class="ai-chat-input-wrapper">
+                    <button class="ai-new-chat-btn" onclick="resetAIChat()" title="Новый чат">
+                        <i class="fas fa-plus"></i>
+                    </button>
                     <textarea 
                         id="aiInput" 
                         class="ai-chat-input" 
