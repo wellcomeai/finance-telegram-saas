@@ -265,6 +265,25 @@ class API {
         return this.put('/api/user/settings', settings);
     }
 
+    // ==================== AI CHAT API ====================
+
+    /**
+     * Send message to AI chat
+     */
+    async sendAIMessage(message, newConversation = false) {
+        return this.post('/api/ai/chat', {
+            message,
+            new_conversation: newConversation
+        });
+    }
+
+    /**
+     * Reset AI conversation
+     */
+    async resetAIConversation() {
+        return this.post('/api/ai/reset');
+    }
+
     // ==================== HELPER METHODS ====================
 
     /**
