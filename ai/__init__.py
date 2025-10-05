@@ -8,7 +8,7 @@ from .voice_transcriber import transcribe_voice
 from .image_processor import process_receipt_image
 from .pdf_processor import process_receipt_pdf
 from .categorizer import categorize_transaction
-from .agent import chat_with_agent, reset_agent_conversation, get_agent_history
+from .agent import chat_with_agent, reset_agent_conversation
 
 __version__ = "1.0.0"
 
@@ -19,6 +19,5 @@ __all__ = [
     "process_receipt_pdf",
     "categorize_transaction",
     "chat_with_agent",
-    "reset_agent_conversation",
-    "get_agent_history"
+    "reset_agent_conversation"
 ]
