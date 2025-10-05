@@ -13,46 +13,10 @@ from telegram_bot.config import BotMessages
 from telegram_bot.keyboards import transaction_confirmation_keyboard
 from ai.pdf_processor import process_receipt_pdf, download_document_file
 from telegram_bot.handlers.text_handler import TransactionStates
-from database.repositories.transaction_repo import TransactionRepository
-from database.repositories.category_repo import CategoryRepository
-from database.connection import get_db_connection
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 router = Router()
-
-
-async def _save_transaction_to_db(transaction_data: dict, user_id: int) -> bool:
-    """
-    Вспомогательная функция для сохранения транзакции в БД
-    
-    Returns:
-        True если успешно сохранено, False в случае ошибки
-    """
-    try:
-        async with get_db_connection() as conn:
-            transaction_repo = TransactionRepository(conn)
-            category_repo = CategoryRepository(conn)
-            
-            # Get category ID
-            category = await category_repo.get_by_name(transaction_data['category_name'])
-            
-            # Create transaction
-            await transaction_repo.create(
-                user_id=user_id,
-                transaction_type=transaction_data['type'],
-                amount=transaction_data['amount'],
-                category_id=category.id if category else None,
-                description=transaction_data['description'],
-                transaction_date=transaction_data.get('date', datetime.now().date())
-            )
-            
-            logger.info(f"Transaction saved: {transaction_data['type']} {transaction_data['amount']} ₽")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error saving transaction to DB: {e}", exc_info=True)
-        return False
 
 
 @router.message(F.document)
