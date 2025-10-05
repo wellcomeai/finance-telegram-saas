@@ -4,7 +4,7 @@ Text transaction parser using OpenAI GPT-5
 
 import logging
 import json
-from typing import Optional, Dict
+from typing import List, Dict
 from openai import AsyncOpenAI
 from datetime import datetime
 
@@ -15,15 +15,16 @@ from shared.constants import CATEGORIES
 logger = logging.getLogger(__name__)
 
 
-async def parse_transaction_text(text: str) -> Optional[Dict]:
+async def parse_transaction_text(text: str) -> List[Dict]:
     """
-    Parse transaction from text using GPT-5
+    Parse transaction(s) from text using GPT-5
     
     Args:
         text: User's text message
         
     Returns:
-        Dictionary with transaction data or None if parsing failed
+        List of transaction dictionaries (может быть пустым списком)
+        Each transaction:
         {
             'type': 'income' or 'expense',
             'amount': float,
@@ -35,10 +36,10 @@ async def parse_transaction_text(text: str) -> Optional[Dict]:
     """
     if not text or len(text.strip()) < 3:
         logger.warning("Text too short for parsing")
-        return None
+        return []
     
     try:
-        logger.info(f"Parsing transaction text: {text[:50]}...")
+        logger.info(f"Parsing transaction text: {text[:100]}...")
         
         # Create prompt
         prompt = prompts.text_parser_prompt(text)
@@ -62,67 +63,108 @@ async def parse_transaction_text(text: str) -> Optional[Dict]:
         
         if not result_text:
             logger.error("Empty response from GPT-5")
-            return None
+            return []
         
-        logger.info(f"GPT-5 response: {result_text[:200]}")
+        logger.info(f"GPT-5 response: {result_text[:300]}")
         
-        # Parse JSON
-        transaction_data = _parse_json_response(result_text)
+        # Parse JSON array
+        transactions_data = _parse_json_response(result_text)
         
-        if not transaction_data:
+        if not transactions_data:
             logger.error("Failed to parse JSON from GPT response")
-            return None
+            return []
         
-        # Validate and enrich data
-        validated_data = _validate_and_enrich(transaction_data)
+        # Validate and enrich each transaction
+        validated_transactions = []
         
-        if validated_data:
-            logger.info(f"Successfully parsed transaction: {validated_data['type']} {validated_data['amount']} ₽")
+        for idx, transaction_data in enumerate(transactions_data, 1):
+            validated = _validate_and_enrich(transaction_data)
+            if validated:
+                validated_transactions.append(validated)
+                logger.info(
+                    f"Transaction {idx}/{len(transactions_data)}: "
+                    f"{validated['type']} {validated['amount']} ₽ - {validated['description']}"
+                )
+            else:
+                logger.warning(f"Failed to validate transaction {idx}: {transaction_data}")
         
-        return validated_data
+        if validated_transactions:
+            logger.info(f"Successfully parsed {len(validated_transactions)} transaction(s)")
+        else:
+            logger.warning("No valid transactions found")
+        
+        return validated_transactions
         
     except Exception as e:
         logger.error(f"Error parsing transaction text: {e}", exc_info=True)
-        return None
+        return []
 
 
-def _parse_json_response(text: str) -> Optional[Dict]:
+def _parse_json_response(text: str) -> List[Dict]:
     """
-    Parse JSON from GPT response (handling markdown code blocks)
+    Parse JSON array from GPT response (handling markdown code blocks)
+    
+    Returns:
+        List of transaction dictionaries or empty list
     """
     try:
         # Remove markdown code blocks if present
         text = text.strip()
+        
+        # Remove ```json or ``` at start
         if text.startswith('```'):
-            # Remove ```json or ```
-            text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+            lines = text.split('\n')
+            # Skip first line (```json or ```)
+            text = '\n'.join(lines[1:])
+        
+        # Remove ``` at end
         if text.endswith('```'):
-            text = text.rsplit('\n', 1)[0] if '\n' in text else text[:-3]
+            lines = text.split('\n')
+            # Remove last line if it's ```
+            if lines[-1].strip() == '```':
+                text = '\n'.join(lines[:-1])
         
         text = text.strip()
         
         # Parse JSON
         data = json.loads(text)
         
-        # Validate required fields
-        required_fields = ['type', 'amount', 'category_name']
-        if not all(field in data for field in required_fields):
-            logger.error(f"Missing required fields in JSON: {data}")
-            return None
+        # Ensure it's a list
+        if not isinstance(data, list):
+            logger.error(f"Expected JSON array, got: {type(data)}")
+            return []
         
-        return data
+        # Validate each transaction has required fields
+        required_fields = ['type', 'amount', 'category_name']
+        valid_transactions = []
+        
+        for idx, transaction in enumerate(data):
+            if not isinstance(transaction, dict):
+                logger.warning(f"Transaction {idx} is not a dict: {transaction}")
+                continue
+            
+            if all(field in transaction for field in required_fields):
+                valid_transactions.append(transaction)
+            else:
+                missing = [f for f in required_fields if f not in transaction]
+                logger.warning(f"Transaction {idx} missing fields: {missing}")
+        
+        return valid_transactions
         
     except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error: {e}. Text: {text}")
-        return None
+        logger.error(f"JSON decode error: {e}. Text: {text[:200]}")
+        return []
     except Exception as e:
         logger.error(f"Error parsing JSON response: {e}")
-        return None
+        return []
 
 
-def _validate_and_enrich(data: Dict) -> Optional[Dict]:
+def _validate_and_enrich(data: Dict) -> Dict | None:
     """
-    Validate and enrich transaction data
+    Validate and enrich single transaction data
+    
+    Returns:
+        Validated transaction dict or None if invalid
     """
     try:
         # Validate type
@@ -159,6 +201,16 @@ def _validate_and_enrich(data: Dict) -> Optional[Dict]:
         date_str = data.get('date', datetime.now().strftime('%Y-%m-%d'))
         try:
             transaction_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            
+            # Валидация даты (не слишком старая, не в будущем)
+            days_diff = (datetime.now().date() - transaction_date).days
+            if days_diff > 365:
+                logger.warning(f"Date too old ({date_str}), using today")
+                transaction_date = datetime.now().date()
+            elif days_diff < 0:
+                logger.warning(f"Date in future ({date_str}), using today")
+                transaction_date = datetime.now().date()
+                
         except ValueError:
             logger.warning(f"Invalid date format: {date_str}, using today")
             transaction_date = datetime.now().date()
@@ -176,5 +228,5 @@ def _validate_and_enrich(data: Dict) -> Optional[Dict]:
         return result
         
     except Exception as e:
-        logger.error(f"Error validating transaction data: {e}")
+        logger.error(f"Error validating transaction data: {e}", exc_info=True)
         return None
