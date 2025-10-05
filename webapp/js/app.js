@@ -293,10 +293,17 @@ class FinanceApp {
             // Get date filter params
             const dateParams = this.getDateFilterParams();
 
+            // Build filters object - only add non-null values
+            const filters = {};
+            if (this.filters.type) filters.type = this.filters.type;
+            if (this.filters.category) filters.category_id = this.filters.category;
+            if (this.filters.dateFrom) filters.start_date = this.filters.dateFrom;
+            if (this.filters.dateTo) filters.end_date = this.filters.dateTo;
+
             const response = await window.api.getTransactions({
                 ...dateParams,
                 limit: 100,
-                ...this.filters
+                ...filters
             });
 
             this.transactions = response.transactions || response || [];
