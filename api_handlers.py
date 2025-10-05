@@ -588,6 +588,121 @@ class APIHandler:
                 {'error': str(e)},
                 status=500
             )
+    
+    # ==================== AI CHAT ====================
+    
+    @staticmethod
+    async def chat_with_ai(request):
+        """
+        POST /api/ai/chat
+        Send message to AI assistant
+        """
+        try:
+            user = request['user']
+            data = await request.json()
+            
+            message = data.get('message', '').strip()
+            new_conversation = data.get('new_conversation', False)
+            
+            if not message:
+                return web.json_response(
+                    {'error': 'Message is required'},
+                    status=400
+                )
+            
+            # Get all user transactions for context
+            async with get_db_connection() as conn:
+                transaction_repo = TransactionRepository(conn)
+                transactions = await transaction_repo.get_user_transactions(
+                    user_id=user.id,
+                    limit=1000  # All transactions
+                )
+            
+            # Format transactions for AI context
+            context = "Информация о транзакциях пользователя:\n"
+            
+            if transactions:
+                total_income = 0
+                total_expense = 0
+                
+                for t in transactions:
+                    amount = float(t['amount'])
+                    type_emoji = "💰" if t['type'] == 'income' else "💸"
+                    
+                    context += f"{type_emoji} {t['transaction_date']}: {amount} ₽ - {t['category_name']}"
+                    if t['description']:
+                        context += f" ({t['description']})"
+                    context += "\n"
+                    
+                    if t['type'] == 'income':
+                        total_income += amount
+                    else:
+                        total_expense += amount
+                
+                balance = total_income - total_expense
+                context += f"\nИтого: доходы {total_income} ₽, расходы {total_expense} ₽, баланс {balance} ₽"
+            else:
+                context = "У пользователя пока нет транзакций."
+            
+            # Add context to message on first message
+            if new_conversation and transactions:
+                message = f"{context}\n\nВопрос пользователя: {message}"
+            
+            # Chat with AI agent
+            from ai.agent import chat_with_agent
+            response = await chat_with_agent(
+                user_id=user.id,
+                message=message,
+                new_conversation=new_conversation
+            )
+            
+            if not response:
+                return web.json_response(
+                    {'error': 'AI не смог обработать запрос'},
+                    status=500
+                )
+            
+            return web.json_response({
+                'response': response,
+                'success': True
+            })
+            
+        except Exception as e:
+            logger.error(f"AI chat error: {e}", exc_info=True)
+            return web.json_response(
+                {'error': str(e)},
+                status=500
+            )
+    
+    @staticmethod
+    async def reset_ai_chat(request):
+        """
+        POST /api/ai/reset
+        Reset AI conversation
+        """
+        try:
+            user = request['user']
+            
+            from ai.agent import reset_agent_conversation
+            success = await reset_agent_conversation(user.id)
+            
+            if success:
+                return web.json_response({
+                    'message': 'Чат сброшен',
+                    'success': True
+                })
+            else:
+                return web.json_response(
+                    {'error': 'Не удалось сбросить чат'},
+                    status=500
+                )
+            
+        except Exception as e:
+            logger.error(f"Reset AI chat error: {e}", exc_info=True)
+            return web.json_response(
+                {'error': str(e)},
+                status=500
+            )
 
 
 def setup_api_routes(app):
@@ -615,5 +730,9 @@ def setup_api_routes(app):
     
     # User
     app.router.add_get('/api/user', APIHandler.get_user_info)
+    
+    # AI Chat
+    app.router.add_post('/api/ai/chat', APIHandler.chat_with_ai)
+    app.router.add_post('/api/ai/reset', APIHandler.reset_ai_chat)
     
     logger.info("API routes configured")
