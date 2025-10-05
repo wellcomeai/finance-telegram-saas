@@ -1289,7 +1289,7 @@
                     <div class="form-group">
                         <label class="form-label">Категория *</label>
                         <div id="categoryGrid" class="category-grid">
-                            <!-- Categories will be inserted here -->
+                            <!-- Categories will be dynamically inserted here by app.js -->
                         </div>
                         <input type="hidden" id="categoryId" required>
                     </div>
@@ -1377,30 +1377,6 @@
         window.getCurrentDateFilter = function() {
             return currentDateFilter;
         };
-
-        // Modal Management
-        function openAddModal() {
-            const modal = document.getElementById('transactionModal');
-            document.body.classList.add('modal-open');
-            modal.classList.remove('closing');
-            modal.classList.add('active');
-            
-            // Scroll modal to top
-            const modalBody = modal.querySelector('.modal-body');
-            if (modalBody) {
-                modalBody.scrollTop = 0;
-            }
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('transactionModal');
-            modal.classList.add('closing');
-            
-            setTimeout(() => {
-                modal.classList.remove('active', 'closing');
-                document.body.classList.remove('modal-open');
-            }, 300);
-        }
 
         // Handle input focus - scroll into view
         document.addEventListener('DOMContentLoaded', function() {
@@ -1520,41 +1496,29 @@
         // Prevent scroll when modal is open on iOS
         let scrollPosition = 0;
 
-        function preventScroll() {
-            scrollPosition = window.pageYOffset;
-            document.body.style.overflow = 'hidden';
-            document.body.style.position = 'fixed';
-            document.body.style.top = `-${scrollPosition}px`;
-            document.body.style.width = '100%';
-        }
-
-        function allowScroll() {
-            document.body.style.removeProperty('overflow');
-            document.body.style.removeProperty('position');
-            document.body.style.removeProperty('top');
-            document.body.style.removeProperty('width');
-            window.scrollTo(0, scrollPosition);
-        }
-
-        // Override openAddModal and closeModal to use scroll prevention
-        const originalOpenAddModal = window.openAddModal || openAddModal;
-        const originalCloseModal = window.closeModal || closeModal;
-
-        window.openAddModal = function() {
-            preventScroll();
-            if (originalOpenAddModal) {
-                originalOpenAddModal();
-            } else {
-                openAddModal();
-            }
-        };
-
+        const originalCloseModal = window.closeModal;
+        
         window.closeModal = function() {
-            allowScroll();
-            if (originalCloseModal) {
-                originalCloseModal();
-            } else {
-                closeModal();
+            const modal = document.getElementById('transactionModal');
+            if (!modal.classList.contains('active')) return;
+            
+            modal.classList.add('closing');
+            
+            setTimeout(() => {
+                modal.classList.remove('active', 'closing');
+                document.body.classList.remove('modal-open');
+                
+                // Restore scroll
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('position');
+                document.body.style.removeProperty('top');
+                document.body.style.removeProperty('width');
+                window.scrollTo(0, scrollPosition);
+            }, 300);
+            
+            // Call app.js closeModal if exists
+            if (originalCloseModal && window.app && window.app.closeModal) {
+                window.app.currentTransaction = null;
             }
         };
     </script>
