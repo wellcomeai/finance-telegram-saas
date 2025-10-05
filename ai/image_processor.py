@@ -1,3 +1,4 @@
+# ai/image_processor.py
 """
 Image OCR processor for receipts using OpenAI Vision
 """
@@ -8,7 +9,7 @@ import base64
 from typing import Optional, Dict
 from openai import AsyncOpenAI
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ai.config import ai_config
 from ai.prompts import prompts
@@ -156,16 +157,40 @@ async def _receipt_to_transaction(receipt_data: Dict) -> Optional[Dict]:
         description = ' - '.join(description_parts) if description_parts else 'Покупка по чеку'
         description = description[:200]  # Limit length
         
-        # Parse date
+        # Parse and validate date
         date_str = receipt_data.get('date')
+        transaction_date = datetime.now().date()  # Default to today
+        
         if date_str:
             try:
-                transaction_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                parsed_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                
+                # ВАЛИДАЦИЯ: проверяем адекватность даты
+                days_difference = (datetime.now().date() - parsed_date).days
+                
+                # Если дата старше 30 дней или в будущем - используем сегодня
+                if days_difference > 30:
+                    logger.warning(
+                        f"Receipt date {date_str} is {days_difference} days ago (too old). "
+                        f"Using current date instead."
+                    )
+                    transaction_date = datetime.now().date()
+                elif days_difference < 0:
+                    logger.warning(
+                        f"Receipt date {date_str} is in the future ({abs(days_difference)} days ahead). "
+                        f"Using current date instead."
+                    )
+                    transaction_date = datetime.now().date()
+                else:
+                    # Дата адекватная - используем её
+                    transaction_date = parsed_date
+                    logger.info(f"Using receipt date: {date_str}")
+                    
             except ValueError:
                 logger.warning(f"Invalid date format: {date_str}, using today")
                 transaction_date = datetime.now().date()
         else:
-            transaction_date = datetime.now().date()
+            logger.info("No date in receipt, using today")
         
         # Categorize
         category = await categorize_transaction(description, amount, 'expense')
