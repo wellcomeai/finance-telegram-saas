@@ -540,6 +540,11 @@ canvas {
     box-shadow: 0 12px 32px rgba(0, 122, 255, 0.5);
 }
 
+/* Hide add button in AI chat section */
+#ai-chat .add-btn-container {
+    display: none;
+}
+
 /* ==================== BOTTOM NAVIGATION ==================== */
 .bottom-nav {
     position: fixed;
@@ -1027,7 +1032,7 @@ canvas {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 20px;
+    padding: 12px 20px;
     background: var(--bg-primary);
     border-bottom: 1px solid var(--border-color);
     position: sticky;
@@ -1036,8 +1041,8 @@ canvas {
 }
 
 .ai-chat-header .section-title {
+    font-size: 18px;
     margin: 0;
-    font-size: 20px;
 }
 
 .reset-chat-btn {
@@ -1111,7 +1116,6 @@ canvas {
     font-size: 15px;
     line-height: 1.5;
     box-shadow: var(--card-shadow);
-    white-space: pre-wrap;
     word-wrap: break-word;
 }
 
@@ -1200,6 +1204,32 @@ canvas {
 
 .ai-chat-input::placeholder {
     color: var(--text-tertiary);
+}
+
+/* New chat button in input */
+.ai-new-chat-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    font-size: 16px;
+}
+
+.ai-new-chat-btn:active {
+    transform: scale(0.9);
+}
+
+.ai-new-chat-btn:hover {
+    background: var(--accent-color);
+    color: white;
 }
 
 .ai-send-btn {
