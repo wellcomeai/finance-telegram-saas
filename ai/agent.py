@@ -5,7 +5,7 @@ Simplified version - no message history stored
 
 import logging
 from typing import Optional, Dict
-from openai import AsyncOpenAI
+import httpx
 
 from ai.config import ai_config
 from database.connection import get_db_connection
@@ -21,6 +21,7 @@ class AIAgent:
     
     def __init__(self):
         self.default_model = "gpt-4o"
+        self.api_url = "https://api.openai.com/v1/responses"
     
     async def _get_system_prompt(self, config_key: str = 'default') -> Optional[Dict]:
         """
@@ -164,15 +165,27 @@ class AIAgent:
                 request_data["previous_response_id"] = previous_response_id
                 logger.info(f"Continuing conversation: prev_id={previous_response_id[:20]}...")
             
-            # Вызов OpenAI Responses API
-            async with AsyncOpenAI(api_key=ai_config.OPENAI_API_KEY) as client:
+            # HTTP запрос к OpenAI Responses API
+            headers = {
+                "Authorization": f"Bearer {ai_config.OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    "/v1/responses",
-                    json=request_data
+                    self.api_url,
+                    json=request_data,
+                    headers=headers
                 )
+                
+                # Проверка статуса
+                if response.status_code != 200:
+                    logger.error(f"API error: status={response.status_code}, body={response.text}")
+                    return "Извините, сервис временно недоступен."
+                
+                response_data = response.json()
             
             # Извлечь данные из ответа
-            response_data = response.json()
             response_id = response_data.get('id')
             
             if not response_id:
@@ -203,6 +216,9 @@ class AIAgent:
             
             return assistant_message
             
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error in agent chat: {e}", exc_info=True)
+            return "Извините, произошла ошибка соединения."
         except Exception as e:
             logger.error(f"Error in agent chat: {e}", exc_info=True)
             return "Извините, произошла ошибка при обработке вашего запроса."
