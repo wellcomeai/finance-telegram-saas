@@ -1,0 +1,33 @@
+# Telegram bot framework
+aiogram==3.15.0
+
+# OpenAI API
+openai==1.51.2
+
+# Async HTTP client
+aiohttp==3.10.10
+
+# HTTP клиент
+httpx==0.27.2
+
+# PDF обработка
+PyPDF2==3.0.1
+
+# Обработка изображений
+Pillow==11.0.0
+
+# Валидация данных
+pydantic==2.9.2
+
+# Переменные окружения
+python-dotenv==1.0.1
+
+# Работа с датами
+python-dateutil==2.9.0
+
+# Typing extensions
+typing-extensions==4.12.2
+
+# PostgreSQL драйвер
+asyncpg==0.30.0
+aiofiles==24.1.0
