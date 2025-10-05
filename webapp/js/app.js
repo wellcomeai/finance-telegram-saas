@@ -143,6 +143,55 @@ class FinanceApp {
         await this.loadSectionData(this.currentSection);
     }
 
+    // ==================== DATE FILTER ====================
+
+    /**
+     * Get date filter parameters based on current filter
+     */
+    getDateFilterParams() {
+        const now = new Date();
+        let startDate, endDate;
+
+        // Get current filter from global function
+        const currentFilter = window.getCurrentDateFilter ? window.getCurrentDateFilter() : 'today';
+
+        switch (currentFilter) {
+            case 'today':
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+                break;
+
+            case 'week':
+                startDate = new Date(now);
+                startDate.setDate(now.getDate() - 7);
+                endDate = now;
+                break;
+
+            case 'month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                endDate = now;
+                break;
+
+            case 'year':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                endDate = now;
+                break;
+
+            case 'all':
+                // Don't apply date filter for "all"
+                return {};
+
+            default:
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                endDate = now;
+        }
+
+        return {
+            start_date: window.api.formatDate(startDate),
+            end_date: window.api.formatDate(endDate)
+        };
+    }
+
     // ==================== DATA LOADING ====================
 
     /**
@@ -197,14 +246,13 @@ class FinanceApp {
         try {
             this.showLoading('recentTransactions');
 
-            // Get current month dates
-            const dates = window.api.getCurrentMonthDates();
+            // Get date filter params
+            const dateParams = this.getDateFilterParams();
             
-            // Load transactions
+            // Load transactions with date filter
             const response = await window.api.getTransactions({
-                start_date: dates.start,
-                end_date: dates.end,
-                limit: 10
+                ...dateParams,
+                limit: 100
             });
 
             this.transactions = response.transactions || response || [];
@@ -234,7 +282,11 @@ class FinanceApp {
         try {
             this.showLoading('allTransactions');
 
+            // Get date filter params
+            const dateParams = this.getDateFilterParams();
+
             const response = await window.api.getTransactions({
+                ...dateParams,
                 limit: 100,
                 ...this.filters
             });
@@ -252,23 +304,45 @@ class FinanceApp {
     }
 
     /**
+     * Load transactions (called from date filter)
+     */
+    async loadTransactions() {
+        // Reload current section data
+        await this.loadSectionData(this.currentSection);
+    }
+
+    /**
+     * Update dashboard (called from date filter)
+     */
+    async updateDashboard() {
+        if (this.currentSection === 'dashboard') {
+            await this.loadDashboard();
+        }
+    }
+
+    /**
      * Load statistics
      */
     async loadStatistics() {
         try {
-            const dates = window.api.getCurrentMonthDates();
+            // Get date filter params
+            const dateParams = this.getDateFilterParams();
+
+            // Use current date range if no filter applied
+            const startDate = dateParams.start_date || window.api.getDateRange('month').start;
+            const endDate = dateParams.end_date || window.api.getDateRange('month').end;
 
             // Load category stats
             const categoryStats = await window.api.getCategoryStats({
-                start_date: dates.start,
-                end_date: dates.end,
+                start_date: startDate,
+                end_date: endDate,
                 type: 'expense'
             });
 
             // Load daily totals
             const dailyTotals = await window.api.getDailyTotals(
-                dates.start,
-                dates.end,
+                startDate,
+                endDate,
                 'expense'
             );
 
@@ -382,7 +456,7 @@ class FinanceApp {
         if (!container) return;
 
         if (this.transactions.length === 0) {
-            this.showEmptyState('recentTransactions', 'Нет транзакций за текущий месяц');
+            this.showEmptyState('recentTransactions', 'Нет транзакций за выбранный период');
             return;
         }
 
@@ -401,7 +475,7 @@ class FinanceApp {
         if (!container) return;
 
         if (this.transactions.length === 0) {
-            this.showEmptyState('allTransactions', 'Нет транзакций');
+            this.showEmptyState('allTransactions', 'Нет транзакций за выбранный период');
             return;
         }
 
@@ -427,7 +501,7 @@ class FinanceApp {
         return `
             <div class="transaction-item" onclick="app.editTransaction(${transaction.id})">
                 <div class="transaction-left">
-                    <div class="transaction-icon">${icon}</div>
+                    <div class="transaction-icon ${amountClass}">${icon}</div>
                     <div class="transaction-info">
                         <h4>${categoryName}</h4>
                         <p>${description}</p>
@@ -449,7 +523,7 @@ class FinanceApp {
         if (!container) return;
 
         if (!categoryStats || categoryStats.length === 0) {
-            container.innerHTML = '<div class="empty-state"><p>Нет данных</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Нет данных за выбранный период</p></div>';
             return;
         }
 
@@ -800,7 +874,7 @@ class FinanceApp {
         const modal = document.getElementById('transactionModal');
         if (modal) {
             modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
+            document.body.classList.add('modal-open');
         }
     }
 
@@ -814,8 +888,12 @@ class FinanceApp {
 
         const modal = document.getElementById('transactionModal');
         if (modal) {
-            modal.classList.remove('active');
-            document.body.style.overflow = '';
+            modal.classList.add('closing');
+            
+            setTimeout(() => {
+                modal.classList.remove('active', 'closing');
+                document.body.classList.remove('modal-open');
+            }, 300);
         }
 
         this.currentTransaction = null;
@@ -968,6 +1046,37 @@ class FinanceApp {
 
             // Close modal
             this.closeModal();
+
+            // Refresh data
+            await this.refreshCurrentSection();
+
+            if (window.telegramApp) {
+                window.telegramApp.hapticNotification('success');
+            }
+
+        } catch (error) {
+            console.error('Delete transaction error:', error);
+            this.showError('Ошибка при удалении транзакции');
+            
+            if (window.telegramApp) {
+                window.telegramApp.hapticNotification('error');
+            }
+        }
+    }
+
+    /**
+     * Delete transaction by ID (called from swipe)
+     */
+    async deleteTransactionById(transactionId) {
+        try {
+            if (window.telegramApp) {
+                window.telegramApp.hapticImpact('heavy');
+            }
+
+            // Delete
+            await window.api.deleteTransaction(transactionId);
+
+            this.showSuccess('Транзакция удалена');
 
             // Refresh data
             await this.refreshCurrentSection();
