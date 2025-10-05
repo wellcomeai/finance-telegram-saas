@@ -28,9 +28,8 @@ class FinanceApp {
         try {
             console.log('Initializing Finance Tracker...');
 
-            // Load initial data
+            // Load categories first
             await this.loadCategories();
-            await this.loadDashboard();
 
             // Setup event listeners
             this.setupEventListeners();
@@ -38,8 +37,11 @@ class FinanceApp {
             // Initialize UI
             this.initializeUI();
 
-            // Setup charts
+            // Setup charts BEFORE loading data
             this.setupCharts();
+
+            // Load initial data AFTER charts are ready
+            await this.loadDashboard();
 
             console.log('Finance Tracker initialized successfully');
 
@@ -756,7 +758,10 @@ class FinanceApp {
      * Update expense chart
      */
     updateExpenseChart() {
-        if (!this.charts.expense) return;
+        if (!this.charts.expense) {
+            console.warn('Expense chart not initialized yet');
+            return;
+        }
 
         // Group by category
         const categoryData = {};
@@ -777,6 +782,8 @@ class FinanceApp {
         this.charts.expense.data.labels = sorted.map(item => item[0]);
         this.charts.expense.data.datasets[0].data = sorted.map(item => item[1]);
         this.charts.expense.update();
+
+        console.log('Expense chart updated with', sorted.length, 'categories');
     }
 
     /**
