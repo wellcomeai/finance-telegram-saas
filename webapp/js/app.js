@@ -157,6 +157,14 @@ class FinanceApp {
         // Get current filter from global function
         const currentFilter = window.getCurrentDateFilter ? window.getCurrentDateFilter() : 'today';
 
+        // ========== ОТЛАДКА: ПОКАЗЫВАЕМ АЛЕРТ ==========
+        // Показываем какой фильтр реально используется
+        if (window.telegramApp) {
+            window.telegramApp.showAlert('Текущий фильтр: ' + currentFilter);
+        }
+        console.log('🔍 Current date filter:', currentFilter);
+        // ===============================================
+
         switch (currentFilter) {
             case 'today':
                 startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -184,9 +192,17 @@ class FinanceApp {
                 return {};
 
             default:
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                endDate = now;
+                console.warn('⚠️ Unexpected filter in default branch:', currentFilter);
+                // Используем 'today' как безопасный fallback
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
         }
+
+        console.log('📅 Date range:', {
+            filter: currentFilter,
+            start: window.api.formatDate(startDate),
+            end: window.api.formatDate(endDate)
+        });
 
         return {
             start_date: window.api.formatDate(startDate),
