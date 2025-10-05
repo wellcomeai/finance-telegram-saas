@@ -244,6 +244,10 @@ class FinanceApp {
      */
     async loadDashboard() {
         try {
+            // Clear container first
+            const container = document.getElementById('recentTransactions');
+            if (container) container.innerHTML = '';
+            
             this.showLoading('recentTransactions');
 
             // Get date filter params
@@ -280,6 +284,10 @@ class FinanceApp {
      */
     async loadAllTransactions() {
         try {
+            // Clear container first to remove skeleton loaders
+            const container = document.getElementById('allTransactions');
+            if (container) container.innerHTML = '';
+            
             this.showLoading('allTransactions');
 
             // Get date filter params
