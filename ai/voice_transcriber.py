@@ -69,9 +69,14 @@ async def transcribe_voice(audio_file_path: str) -> List[Dict]:
         transactions = await parse_transaction_text(transcribed_text)
         
         if transactions and len(transactions) > 0:
+            # Исправленное логирование без вложенных f-строк
+            transactions_summary = ", ".join([
+                f"{t['type']} {t['amount']} ₽" 
+                for t in transactions
+            ])
             logger.info(
                 f"Successfully parsed {len(transactions)} transaction(s) from voice: "
-                f"{[f\"{t['type']} {t['amount']} ₽\" for t in transactions]}"
+                f"{transactions_summary}"
             )
         else:
             logger.warning("Failed to parse transactions from transcribed text")
