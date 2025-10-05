@@ -76,34 +76,10 @@ body {
     overflow-x: hidden;
 }
 
-/* ==================== HEADER ==================== */
-.header {
-    background: var(--gradient);
-    padding: var(--spacing-lg);
-    text-align: center;
-    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-}
-
-.header h1 {
-    font-size: 24px;
-    font-weight: 700;
-    margin-bottom: 5px;
-    letter-spacing: -0.5px;
-}
-
-.header p {
-    font-size: 14px;
-    opacity: 0.9;
-    font-weight: 400;
-}
-
 /* ==================== BALANCE CARD ==================== */
 .balance-card {
     background: var(--gradient);
-    margin: var(--spacing-lg);
+    margin: 0 var(--spacing-lg) var(--spacing-lg);
     padding: var(--spacing-xl) var(--spacing-lg);
     border-radius: var(--radius-xl);
     box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
@@ -381,7 +357,7 @@ canvas {
     position: fixed;
     bottom: 90px;
     right: 20px;
-    z-index: 100;
+    z-index: 500;
 }
 
 .add-btn {
@@ -427,6 +403,7 @@ canvas {
     padding: 8px;
     transition: all var(--transition-normal);
     position: relative;
+    pointer-events: auto;
 }
 
 .nav-item::before {
@@ -508,6 +485,7 @@ canvas {
     border: 1px solid var(--border-color);
     max-height: 90vh;
     overflow-y: auto;
+    z-index: 2001;
 }
 
 @keyframes slideUp {
