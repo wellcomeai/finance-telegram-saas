@@ -3,7 +3,7 @@ Voice transcription using OpenAI Whisper
 """
 
 import logging
-from typing import Optional
+from typing import List, Dict
 from openai import AsyncOpenAI
 from pathlib import Path
 
@@ -13,15 +13,24 @@ from ai.text_parser import parse_transaction_text
 logger = logging.getLogger(__name__)
 
 
-async def transcribe_voice(audio_file_path: str) -> Optional[dict]:
+async def transcribe_voice(audio_file_path: str) -> List[Dict]:
     """
-    Transcribe voice message and parse transaction
+    Transcribe voice message and parse transaction(s)
     
     Args:
         audio_file_path: Path to audio file (.ogg, .mp3, etc.)
         
     Returns:
-        Transaction data dictionary or None
+        List of transaction data dictionaries (может быть пустым списком)
+        Each transaction:
+        {
+            'type': 'income' or 'expense',
+            'amount': float,
+            'category_name': str,
+            'category_icon': str,
+            'description': str,
+            'date': date object
+        }
     """
     try:
         logger.info(f"Transcribing voice message: {audio_file_path}")
@@ -30,13 +39,13 @@ async def transcribe_voice(audio_file_path: str) -> Optional[dict]:
         file_path = Path(audio_file_path)
         if not file_path.exists():
             logger.error(f"Audio file not found: {audio_file_path}")
-            return None
+            return []
         
         # Check file size (optional safety check)
         file_size = file_path.stat().st_size
         if file_size > 25 * 1024 * 1024:  # 25MB limit
             logger.error(f"Audio file too large: {file_size} bytes")
-            return None
+            return []
         
         logger.info(f"Audio file size: {file_size} bytes")
         
@@ -54,21 +63,24 @@ async def transcribe_voice(audio_file_path: str) -> Optional[dict]:
         
         if not transcribed_text or len(transcribed_text.strip()) < 3:
             logger.warning("Transcribed text too short")
-            return None
+            return []
         
-        # Parse transaction from transcribed text
-        transaction_data = await parse_transaction_text(transcribed_text)
+        # Parse transaction(s) from transcribed text - теперь возвращает список
+        transactions = await parse_transaction_text(transcribed_text)
         
-        if transaction_data:
-            logger.info(f"Successfully parsed voice transaction: {transaction_data['type']} {transaction_data['amount']} ₽")
+        if transactions and len(transactions) > 0:
+            logger.info(
+                f"Successfully parsed {len(transactions)} transaction(s) from voice: "
+                f"{[f\"{t['type']} {t['amount']} ₽\" for t in transactions]}"
+            )
         else:
-            logger.warning("Failed to parse transaction from transcribed text")
+            logger.warning("Failed to parse transactions from transcribed text")
         
-        return transaction_data
+        return transactions
         
     except Exception as e:
         logger.error(f"Error transcribing voice: {e}", exc_info=True)
-        return None
+        return []
 
 
 async def download_voice_file(bot, file_id: str, destination: str) -> bool:
