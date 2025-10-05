@@ -18,11 +18,6 @@
     <link rel="stylesheet" href="/webapp/css/style.css">
 </head>
 <body data-theme="light">
-    
-    <!-- Theme Toggle Button -->
-    <button class="theme-toggle" onclick="toggleTheme()">
-        <i class="fas fa-moon" id="themeIcon"></i>
-    </button>
 
     <!-- Dashboard Section -->
     <div id="dashboard" class="section active">
@@ -264,35 +259,6 @@
     <script src="/webapp/js/app.js"></script>
 
     <script>
-        // Theme Toggle
-        function toggleTheme() {
-            const body = document.body;
-            const currentTheme = body.getAttribute('data-theme');
-            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-            const icon = document.getElementById('themeIcon');
-            
-            body.setAttribute('data-theme', newTheme);
-            icon.className = newTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-            
-            // Save to localStorage
-            localStorage.setItem('theme', newTheme);
-            
-            // Animate icon
-            icon.style.transform = 'rotate(360deg)';
-            setTimeout(() => {
-                icon.style.transform = 'rotate(0deg)';
-            }, 300);
-        }
-
-        // Load saved theme
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            const icon = document.getElementById('themeIcon');
-            document.body.setAttribute('data-theme', savedTheme);
-            icon.className = savedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
-            icon.style.transition = 'transform 0.3s ease';
-        });
-
         // Date Filter
         let currentDateFilter = 'today';
 
