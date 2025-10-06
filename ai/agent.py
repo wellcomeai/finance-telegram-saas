@@ -20,7 +20,7 @@ class AIAgent:
     """
     
     def __init__(self):
-        self.default_model = "gpt-4o"
+        self.default_model = "gpt-4o-mini"
         self.api_url = "https://api.openai.com/v1/responses"
     
     async def _get_system_prompt(self, config_key: str = 'default') -> Optional[Dict]:
