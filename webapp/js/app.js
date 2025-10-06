@@ -1219,7 +1219,7 @@ class FinanceApp {
     }
 
     /**
-     * Add message to chat
+     * Add message to chat with improved formatting
      */
     addAIMessage(role, text) {
         const messagesContainer = document.getElementById('aiMessages');
@@ -1232,10 +1232,13 @@ class FinanceApp {
         const now = new Date();
         const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
         
+        // ФОРМАТИРОВАНИЕ ТЕКСТА
+        const formattedText = this.formatAIMessage(text);
+        
         messageDiv.innerHTML = `
             <div class="ai-message-avatar">${avatar}</div>
             <div class="ai-message-content">
-                <div class="ai-message-text">${text}</div>
+                <div class="ai-message-text">${formattedText}</div>
                 <div class="ai-message-time">${time}</div>
             </div>
         `;
@@ -1247,6 +1250,65 @@ class FinanceApp {
         
         // Store message
         this.aiMessages.push({ role, text, time: now });
+    }
+
+    /**
+     * Format AI message with markdown-like syntax
+     */
+    formatAIMessage(text) {
+        // Helper: Escape HTML
+        const escapeHtml = (str) => {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        };
+        
+        // Экранируем HTML
+        let formatted = escapeHtml(text);
+        
+        // 1. Жирный текст: **текст** → <strong>текст</strong>
+        formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // 2. Курсив: *текст* → <em>текст</em> (но не путать с ** для жирного)
+        formatted = formatted.replace(/(?<!\*)\*(?!\*)(.+?)\*(?!\*)/g, '<em>$1</em>');
+        
+        // 3. Конвертируем markdown списки
+        // - пункт → <li>пункт</li>
+        formatted = formatted.replace(/^- (.+)$/gm, '<li>$1</li>');
+        
+        // Группируем последовательные <li> в <ul>
+        formatted = formatted.replace(/(<li>.*?<\/li>\n?)+/g, (match) => {
+            return '<ul>' + match + '</ul>';
+        });
+        
+        // 4. Нумерованные списки: 1. пункт → <li>пункт</li>
+        formatted = formatted.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+        
+        // Группируем последовательные нумерованные <li> в <ol>
+        // (только те, что не в <ul>)
+        formatted = formatted.replace(/(?<!<ul>)(<li>.*?<\/li>\n?)+(?!<\/ul>)/g, (match) => {
+            return '<ol>' + match + '</ol>';
+        });
+        
+        // 5. Переносы строк → <br>
+        formatted = formatted.replace(/\n/g, '<br>');
+        
+        // 6. Убираем лишние <br> внутри списков
+        formatted = formatted.replace(/<\/li><br>/g, '</li>');
+        formatted = formatted.replace(/<ul><br>/g, '<ul>');
+        formatted = formatted.replace(/<\/ul><br>/g, '</ul>');
+        formatted = formatted.replace(/<ol><br>/g, '<ol>');
+        formatted = formatted.replace(/<\/ol><br>/g, '</ol>');
+        
+        // 7. Двойные переносы строк → параграфы (но не внутри списков)
+        formatted = formatted.replace(/<br><br>/g, '</p><p>');
+        
+        // Оборачиваем всё в параграф если есть </p><p>
+        if (formatted.includes('</p><p>')) {
+            formatted = '<p>' + formatted + '</p>';
+        }
+        
+        return formatted;
     }
 
     /**
@@ -1343,16 +1405,6 @@ class FinanceApp {
         const textarea = event.target;
         textarea.style.height = 'auto';
         textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-    }
-
-    /**
-     * Escape HTML - БОЛЬШЕ НЕ ИСПОЛЬЗУЕТСЯ для AI сообщений
-     * Оставлено для обратной совместимости
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 
     // ==================== HELPERS ====================
