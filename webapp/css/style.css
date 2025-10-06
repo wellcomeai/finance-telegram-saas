@@ -1348,3 +1348,64 @@ body.modal-open {
     overflow: hidden;
     touch-action: none;
 }
+
+/* ==================== AI MESSAGE FORMATTING ==================== */
+
+/* Списки в AI сообщениях */
+.ai-message-text ul,
+.ai-message-text ol {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.ai-message-text li {
+    margin: 4px 0;
+    line-height: 1.6;
+}
+
+.ai-message-text ul li {
+    list-style-type: disc;
+}
+
+.ai-message-text ol li {
+    list-style-type: decimal;
+}
+
+/* Жирный текст */
+.ai-message-text strong {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Курсив */
+.ai-message-text em {
+    font-style: italic;
+    color: var(--text-primary);
+}
+
+/* Параграфы */
+.ai-message-text p {
+    margin: 8px 0;
+}
+
+.ai-message-text p:first-child {
+    margin-top: 0;
+}
+
+.ai-message-text p:last-child {
+    margin-bottom: 0;
+}
+
+/* Отступы между блоками */
+.ai-message-text ul + p,
+.ai-message-text ol + p,
+.ai-message-text p + ul,
+.ai-message-text p + ol {
+    margin-top: 12px;
+}
+
+/* Для user сообщений - белый текст */
+.ai-message.user .ai-message-text strong,
+.ai-message.user .ai-message-text em {
+    color: white;
+}
