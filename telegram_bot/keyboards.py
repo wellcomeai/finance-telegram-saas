@@ -93,3 +93,37 @@ def open_app_keyboard() -> InlineKeyboardMarkup:
         ]
     )
     return keyboard
+
+
+def ai_chat_keyboard() -> InlineKeyboardMarkup:
+    """
+    Keyboard with AI Assistant button
+    """
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🤖 AI Помощник",
+                    callback_data="ai_chat_start"
+                )
+            ]
+        ]
+    )
+    return keyboard
+
+
+def ai_end_keyboard() -> InlineKeyboardMarkup:
+    """
+    Keyboard with "End Dialog" button for AI responses
+    """
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Завершить диалог",
+                    callback_data="ai_chat_end"
+                )
+            ]
+        ]
+    )
+    return keyboard
