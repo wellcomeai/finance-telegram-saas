@@ -22,6 +22,7 @@ from telegram_bot.handlers.text_handler import router as text_router
 from telegram_bot.handlers.voice_handler import router as voice_router
 from telegram_bot.handlers.photo_handler import router as photo_router
 from telegram_bot.handlers.document_handler import router as document_router
+from telegram_bot.handlers.ai_chat_handler import router as ai_chat_router
 
 # Import middleware
 from telegram_bot.middleware import AuthMiddleware
@@ -153,6 +154,7 @@ async def main():
         # Register bot handlers
         dp.include_router(start_router)
         dp.include_router(help_router)
+        dp.include_router(ai_chat_router)
         dp.include_router(text_router)
         dp.include_router(voice_router)
         dp.include_router(photo_router)
