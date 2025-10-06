@@ -48,7 +48,7 @@ async def _load_all_user_transactions(user_id: int) -> list:
         async with get_db_connection() as conn:
             transaction_repo = TransactionRepository(conn)
             
-            # ✅ ИСПРАВЛЕНО: используем get_user_transactions с большим лимитом
+            # ✅ Используем get_user_transactions с большим лимитом
             transactions = await transaction_repo.get_user_transactions(
                 user_id=user_id,
                 limit=10000  # Большое число чтобы получить ВСЕ транзакции
@@ -83,7 +83,6 @@ def _format_all_transactions_context(transactions: list) -> str:
     total_income = 0
     total_expense = 0
     
-    # ✅ ИСПРАВЛЕНО: используем t['type'] вместо t.type
     for t in transactions:
         if t['type'] == 'income':
             total_income += float(t['amount'])
@@ -96,7 +95,6 @@ def _format_all_transactions_context(transactions: list) -> str:
     categories_expense = {}
     categories_income = {}
     
-    # ✅ ИСПРАВЛЕНО: используем t['field'] и t.get('field')
     for t in transactions:
         amount = float(t['amount'])
         category = t.get('category_name') or "Без категории"
@@ -121,7 +119,6 @@ def _format_all_transactions_context(transactions: list) -> str:
     # ВСЕ категории расходов
     sorted_expenses = sorted(categories_expense.items(), key=lambda x: x[1], reverse=True)
     for category, amount in sorted_expenses:
-        # ✅ ИСПРАВЛЕНО: используем t['type'] и t.get()
         count = sum(1 for t in transactions if t['type'] == 'expense' and (t.get('category_name') or "Без категории") == category)
         context += f"- {category}: {amount:,.0f} ₽ ({count} транзакций)\n"
     
@@ -130,7 +127,6 @@ def _format_all_transactions_context(transactions: list) -> str:
     # ВСЕ категории доходов
     sorted_income = sorted(categories_income.items(), key=lambda x: x[1], reverse=True)
     for category, amount in sorted_income:
-        # ✅ ИСПРАВЛЕНО
         count = sum(1 for t in transactions if t['type'] == 'income' and (t.get('category_name') or "Без категории") == category)
         context += f"- {category}: {amount:,.0f} ₽ ({count} транзакций)\n"
     
@@ -138,14 +134,13 @@ def _format_all_transactions_context(transactions: list) -> str:
     context += f"\n📝 ПОЛНЫЙ СПИСОК ВСЕХ {total_count} ТРАНЗАКЦИЙ (от новых к старым):\n\n"
     
     for idx, t in enumerate(transactions, 1):
-        # ✅ ИСПРАВЛЕНО: безопасная работа с датой
+        # Безопасная работа с датой
         date_obj = t.get('transaction_date')
         if date_obj:
             date_str = date_obj.strftime('%d.%m.%Y') if hasattr(date_obj, 'strftime') else str(date_obj)
         else:
             date_str = "Нет даты"
         
-        # ✅ ИСПРАВЛЕНО: используем t['type']
         type_emoji = "💰" if t['type'] == 'income' else "💸"
         type_name = "Доход" if t['type'] == 'income' else "Расход"
         
@@ -179,54 +174,84 @@ def _format_all_transactions_context(transactions: list) -> str:
     return context
 
 
+async def _send_message_with_context(user_id: int, user_message: str, state: FSMContext) -> str:
+    """
+    Отправить сообщение с контекстом (если первое сообщение)
+    
+    Args:
+        user_id: ID пользователя
+        user_message: Сообщение от пользователя
+        state: FSM state
+        
+    Returns:
+        Ответ от AI
+    """
+    data = await state.get_data()
+    context_loaded = data.get('context_loaded', False)
+    
+    # ✅ ПЕРВОЕ сообщение? Загружаем контекст!
+    if not context_loaded:
+        logger.info(f"First message - loading ALL transactions for user {user_id}")
+        
+        # Загружаем транзакции
+        transactions = await _load_all_user_transactions(user_id)
+        context = _format_all_transactions_context(transactions)
+        
+        # ✅ Добавляем контекст к вопросу пользователя
+        full_message = f"{context}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nВопрос пользователя: {user_message}"
+        
+        logger.info(
+            f"Sending first message with context: "
+            f"user_id={user_id}, transactions={len(transactions)}, "
+            f"context_length={len(context)} chars"
+        )
+        
+        # Отправляем в AI (новая сессия с контекстом)
+        ai_response = await chat_with_agent(
+            user_id=user_id,
+            message=full_message,
+            new_conversation=True
+        )
+        
+        # Отмечаем что контекст загружен
+        await state.update_data(context_loaded=True)
+        
+        return ai_response
+        
+    else:
+        # ✅ НЕ первое сообщение - просто отправляем текст
+        logger.info(f"AI message from user {user_id}: {user_message[:100]}")
+        
+        ai_response = await chat_with_agent(
+            user_id=user_id,
+            message=user_message,
+            new_conversation=False
+        )
+        
+        return ai_response
+
+
 # ==================== AI CHAT START ====================
 
 @router.callback_query(F.data == "ai_chat_start")
 async def start_ai_chat(callback: CallbackQuery, state: FSMContext, db_user):
     """
-    Start AI chat session with COMPLETE user's financial context
-    Загружаем ВСЕ транзакции, отправляем полный контекст AI
+    Start AI chat - показываем приветствие БЕЗ загрузки данных
+    Данные загрузятся при первом вопросе пользователя
     """
     await callback.answer()
     
-    try:
-        # Set FSM state
-        await state.set_state(AIChatStates.in_chat)
-        
-        # Загружаем АБСОЛЮТНО ВСЕ транзакции пользователя
-        logger.info(f"Loading ALL transactions for AI context: user_id={db_user.id}")
-        transactions = await _load_all_user_transactions(db_user.id)
-        
-        # Форматируем ПОЛНЫЙ контекст со ВСЕМИ транзакциями
-        context = _format_all_transactions_context(transactions)
-        
-        logger.info(
-            f"Sending COMPLETE financial context to AI: "
-            f"user_id={db_user.id}, total_transactions={len(transactions)}, "
-            f"context_length={len(context)} chars"
-        )
-        
-        # Отправляем ПОЛНЫЙ контекст AI как первое сообщение
-        await chat_with_agent(
-            user_id=db_user.id,
-            message=context,
-            new_conversation=True  # Начинаем новую сессию с полным контекстом
-        )
-        
-        # Send welcome message to user
-        await callback.message.answer(
-            BotMessages.AI_WELCOME,
-            reply_markup=ai_end_keyboard()
-        )
-        
-        logger.info(f"AI chat started with FULL context for user {db_user.id}")
-        
-    except Exception as e:
-        logger.error(f"Error starting AI chat: {e}", exc_info=True)
-        await callback.message.answer(
-            "❌ Ошибка при запуске AI помощника. Попробуйте позже.",
-            reply_markup=ai_chat_keyboard()
-        )
+    # ✅ СРАЗУ показываем приветствие (БЕЗ ожидания!)
+    await callback.message.answer(
+        BotMessages.AI_WELCOME,
+        reply_markup=ai_end_keyboard()
+    )
+    
+    # ✅ Устанавливаем состояние с флагом
+    await state.set_state(AIChatStates.in_chat)
+    await state.update_data(context_loaded=False)  # Контекст ещё не загружен
+    
+    logger.info(f"AI chat started for user {db_user.id} (instant welcome)")
 
 
 # ==================== TEXT MESSAGE HANDLER ====================
@@ -234,25 +259,23 @@ async def start_ai_chat(callback: CallbackQuery, state: FSMContext, db_user):
 @router.message(AIChatStates.in_chat, F.text & ~F.text.startswith('/'))
 async def handle_ai_text(message: Message, state: FSMContext, db_user):
     """
-    Handle text messages in AI chat mode
-    Отправляем текст пользователя AI и получаем ответ
+    Handle text messages - загружаем контекст при ПЕРВОМ вопросе
     """
     try:
         # Show typing indicator
         await message.bot.send_chat_action(message.chat.id, "typing")
         
         user_message = message.text
-        logger.info(f"AI text from user {db_user.id}: {user_message[:100]}")
         
-        # Get AI response (new_conversation=False - продолжаем сессию)
-        ai_response = await chat_with_agent(
+        # ✅ Отправляем с контекстом (если первый раз)
+        ai_response = await _send_message_with_context(
             user_id=db_user.id,
-            message=user_message,
-            new_conversation=False
+            user_message=user_message,
+            state=state
         )
         
+        # Отправляем ответ
         if ai_response:
-            # Send AI response with "End dialog" button
             await message.answer(
                 ai_response,
                 reply_markup=ai_end_keyboard()
@@ -332,11 +355,11 @@ async def handle_ai_voice(message: Message, state: FSMContext, db_user):
         # Show typing
         await message.bot.send_chat_action(message.chat.id, "typing")
         
-        # Get AI response
-        ai_response = await chat_with_agent(
+        # ✅ Отправляем с контекстом (если первый раз)
+        ai_response = await _send_message_with_context(
             user_id=db_user.id,
-            message=transcribed_text,
-            new_conversation=False
+            user_message=transcribed_text,
+            state=state
         )
         
         if ai_response:
@@ -430,11 +453,11 @@ async def handle_ai_photo(message: Message, state: FSMContext, db_user):
         # Show typing
         await message.bot.send_chat_action(message.chat.id, "typing")
         
-        # Get AI analysis
-        ai_response = await chat_with_agent(
+        # ✅ Отправляем с контекстом (если первый раз)
+        ai_response = await _send_message_with_context(
             user_id=db_user.id,
-            message=receipt_text,
-            new_conversation=False
+            user_message=receipt_text,
+            state=state
         )
         
         if ai_response:
@@ -539,11 +562,11 @@ async def handle_ai_document(message: Message, state: FSMContext, db_user):
         # Show typing
         await message.bot.send_chat_action(message.chat.id, "typing")
         
-        # Get AI analysis
-        ai_response = await chat_with_agent(
+        # ✅ Отправляем с контекстом (если первый раз)
+        ai_response = await _send_message_with_context(
             user_id=db_user.id,
-            message=receipt_text,
-            new_conversation=False
+            user_message=receipt_text,
+            state=state
         )
         
         if ai_response:
