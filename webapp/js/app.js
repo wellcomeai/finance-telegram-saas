@@ -115,6 +115,16 @@ class FinanceApp {
                 navItem.classList.add('active');
             }
 
+            // Show/hide add button based on section
+            const addButton = document.querySelector('.add-btn-container');
+            if (addButton) {
+                if (sectionName === 'ai-chat') {
+                    addButton.style.display = 'none';
+                } else {
+                    addButton.style.display = 'block';
+                }
+            }
+
             // Update current section
             this.currentSection = sectionName;
 
