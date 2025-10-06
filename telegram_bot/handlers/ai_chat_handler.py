@@ -49,9 +49,9 @@ async def _load_all_user_transactions(user_id: int) -> list:
             transaction_repo = TransactionRepository(conn)
             
             # Получаем ВСЕ транзакции БЕЗ ЛИМИТА
-            transactions = await transaction_repo.get_by_user(
+            transactions = await transaction_repo.get_user_transactions(
                 user_id=user_id,
-                limit=None
+                limit=5000
             )
             
             logger.info(f"Loaded ALL {len(transactions)} transactions for user {user_id}")
