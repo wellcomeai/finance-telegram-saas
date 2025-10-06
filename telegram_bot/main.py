@@ -150,6 +150,7 @@ async def main():
 
         # Register middleware
         dp.message.middleware(AuthMiddleware())
+        dp.callback_query.middleware(AuthMiddleware())
 
         # Register bot handlers
         dp.include_router(start_router)
