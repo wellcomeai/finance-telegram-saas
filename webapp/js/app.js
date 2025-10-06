@@ -6,7 +6,8 @@
 class FinanceApp {
     constructor() {
         this.currentSection = 'dashboard';
-        this.transactions = [];
+        this.allTransactions = []; // ВСЕ транзакции для расчета баланса
+        this.periodTransactions = []; // Транзакции за выбранный период
         this.categories = [];
         this.stats = {};
         this.charts = {};
@@ -145,7 +146,7 @@ class FinanceApp {
                 await this.loadDashboard();
                 break;
             case 'transactions':
-                await this.loadAllTransactions();
+                await this.loadAllTransactionsSection();
                 break;
             case 'stats':
                 await this.loadStatistics();
@@ -270,19 +271,25 @@ class FinanceApp {
             
             this.showLoading('recentTransactions');
 
-            // Get date filter params
+            // ЗАПРОС 1: Загрузить ВСЕ транзакции для расчета общего баланса
+            const allResponse = await window.api.getTransactions({
+                limit: 10000 // Большой лимит чтобы получить все
+            });
+            this.allTransactions = allResponse.transactions || allResponse || [];
+
+            // ЗАПРОС 2: Загрузить транзакции за выбранный период
             const dateParams = this.getDateFilterParams();
-            
-            // Load transactions with date filter
-            const response = await window.api.getTransactions({
+            const periodResponse = await window.api.getTransactions({
                 ...dateParams,
                 limit: 100
             });
+            this.periodTransactions = periodResponse.transactions || periodResponse || [];
 
-            this.transactions = response.transactions || response || [];
+            // Рассчитать общий баланс из ВСЕХ транзакций
+            this.calculateBalance();
 
-            // Calculate stats
-            this.calculateStats();
+            // Рассчитать статистику за выбранный период
+            this.calculatePeriodStats();
 
             // Update UI
             this.updateBalanceCard();
@@ -300,9 +307,9 @@ class FinanceApp {
     }
 
     /**
-     * Load all transactions
+     * Load all transactions for transactions section
      */
-    async loadAllTransactions() {
+    async loadAllTransactionsSection() {
         try {
             // Clear container first to remove skeleton loaders
             const container = document.getElementById('allTransactions');
@@ -326,7 +333,7 @@ class FinanceApp {
                 ...filters
             });
 
-            this.transactions = response.transactions || response || [];
+            this.periodTransactions = response.transactions || response || [];
 
             this.renderAllTransactions();
             this.hideLoading('allTransactions');
@@ -393,27 +400,47 @@ class FinanceApp {
     }
 
     /**
-     * Calculate statistics from transactions
+     * Calculate ОБЩИЙ БАЛАНС из ВСЕХ транзакций (не зависит от фильтра)
      */
-    calculateStats() {
-        this.stats = {
-            totalIncome: 0,
-            totalExpense: 0,
-            balance: 0,
-            count: this.transactions.length,
-            avgExpense: 0,
-            topCategory: '—'
-        };
+    calculateBalance() {
+        let totalIncome = 0;
+        let totalExpense = 0;
 
-        const categoryTotals = {};
-
-        this.transactions.forEach(transaction => {
+        this.allTransactions.forEach(transaction => {
             const amount = parseFloat(transaction.amount);
 
             if (transaction.type === 'income') {
-                this.stats.totalIncome += amount;
+                totalIncome += amount;
             } else {
-                this.stats.totalExpense += amount;
+                totalExpense += amount;
+            }
+        });
+
+        // Сохраняем общий баланс
+        this.stats.totalBalance = totalIncome - totalExpense;
+
+        console.log('Общий баланс рассчитан:', this.stats.totalBalance);
+    }
+
+    /**
+     * Calculate статистику за ВЫБРАННЫЙ ПЕРИОД
+     */
+    calculatePeriodStats() {
+        this.stats.periodIncome = 0;
+        this.stats.periodExpense = 0;
+        this.stats.count = this.periodTransactions.length;
+        this.stats.avgExpense = 0;
+        this.stats.topCategory = '—';
+
+        const categoryTotals = {};
+
+        this.periodTransactions.forEach(transaction => {
+            const amount = parseFloat(transaction.amount);
+
+            if (transaction.type === 'income') {
+                this.stats.periodIncome += amount;
+            } else {
+                this.stats.periodExpense += amount;
                 
                 // Track category totals
                 const categoryName = transaction.category_name || 'Прочее';
@@ -421,12 +448,10 @@ class FinanceApp {
             }
         });
 
-        this.stats.balance = this.stats.totalIncome - this.stats.totalExpense;
-
         // Calculate average expense
-        const expenseCount = this.transactions.filter(t => t.type === 'expense').length;
+        const expenseCount = this.periodTransactions.filter(t => t.type === 'expense').length;
         if (expenseCount > 0) {
-            this.stats.avgExpense = this.stats.totalExpense / expenseCount;
+            this.stats.avgExpense = this.stats.periodExpense / expenseCount;
         }
 
         // Find top category
@@ -436,6 +461,12 @@ class FinanceApp {
                 maxAmount = categoryTotals[category];
                 this.stats.topCategory = category;
             }
+        });
+
+        console.log('Статистика за период:', {
+            income: this.stats.periodIncome,
+            expense: this.stats.periodExpense,
+            count: this.stats.count
         });
     }
 
@@ -449,16 +480,19 @@ class FinanceApp {
         const incomeElement = document.getElementById('totalIncome');
         const expenseElement = document.getElementById('totalExpense');
 
+        // БАЛАНС - всегда общий (за всё время)
         if (balanceElement) {
-            balanceElement.textContent = this.formatAmount(this.stats.balance);
+            balanceElement.textContent = this.formatAmount(this.stats.totalBalance);
         }
 
+        // ДОХОДЫ - за выбранный период
         if (incomeElement) {
-            incomeElement.textContent = this.formatAmount(this.stats.totalIncome);
+            incomeElement.textContent = this.formatAmount(this.stats.periodIncome);
         }
 
+        // РАСХОДЫ - за выбранный период
         if (expenseElement) {
-            expenseElement.textContent = this.formatAmount(this.stats.totalExpense);
+            expenseElement.textContent = this.formatAmount(this.stats.periodExpense);
         }
     }
 
@@ -490,12 +524,12 @@ class FinanceApp {
         const container = document.getElementById('recentTransactions');
         if (!container) return;
 
-        if (this.transactions.length === 0) {
+        if (this.periodTransactions.length === 0) {
             this.showEmptyState('recentTransactions', 'Нет транзакций за выбранный период');
             return;
         }
 
-        const html = this.transactions.slice(0, 10).map(transaction => 
+        const html = this.periodTransactions.slice(0, 10).map(transaction => 
             this.renderTransactionItem(transaction)
         ).join('');
 
@@ -509,12 +543,12 @@ class FinanceApp {
         const container = document.getElementById('allTransactions');
         if (!container) return;
 
-        if (this.transactions.length === 0) {
+        if (this.periodTransactions.length === 0) {
             this.showEmptyState('allTransactions', 'Нет транзакций за выбранный период');
             return;
         }
 
-        const html = this.transactions.map(transaction => 
+        const html = this.periodTransactions.map(transaction => 
             this.renderTransactionItem(transaction)
         ).join('');
 
@@ -773,7 +807,7 @@ class FinanceApp {
     }
 
     /**
-     * Update expense chart
+     * Update expense chart (используем periodTransactions)
      */
     updateExpenseChart() {
         if (!this.charts.expense) {
@@ -781,10 +815,10 @@ class FinanceApp {
             return;
         }
 
-        // Group by category
+        // Group by category (из транзакций за период)
         const categoryData = {};
         
-        this.transactions
+        this.periodTransactions
             .filter(t => t.type === 'expense')
             .forEach(transaction => {
                 const category = transaction.category_name || 'Прочее';
@@ -869,8 +903,12 @@ class FinanceApp {
                 window.telegramApp.hapticImpact('light');
             }
 
-            // Find transaction
-            const transaction = this.transactions.find(t => t.id === transactionId);
+            // Find transaction in period transactions first, then in all transactions
+            let transaction = this.periodTransactions.find(t => t.id === transactionId);
+            if (!transaction) {
+                transaction = this.allTransactions.find(t => t.id === transactionId);
+            }
+            
             if (!transaction) {
                 console.error('Transaction not found:', transactionId);
                 return;
@@ -1072,7 +1110,7 @@ class FinanceApp {
             if (!transactionId) return;
 
             // Confirm
-            const confirmed = await this.showConfirm('Удалить транзакцию?');
+            const confirmed = await this.showConfirm('Удалить эту транзакцию?');
             if (!confirmed) return;
 
             if (window.telegramApp) {
