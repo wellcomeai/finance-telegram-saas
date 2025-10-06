@@ -48,10 +48,10 @@ async def _load_all_user_transactions(user_id: int) -> list:
         async with get_db_connection() as conn:
             transaction_repo = TransactionRepository(conn)
             
-            # Получаем ВСЕ транзакции БЕЗ ЛИМИТА
+            # ✅ ИСПРАВЛЕНО: используем get_user_transactions с большим лимитом
             transactions = await transaction_repo.get_user_transactions(
                 user_id=user_id,
-                limit=5000
+                limit=10000  # Большое число чтобы получить ВСЕ транзакции
             )
             
             logger.info(f"Loaded ALL {len(transactions)} transactions for user {user_id}")
@@ -83,11 +83,12 @@ def _format_all_transactions_context(transactions: list) -> str:
     total_income = 0
     total_expense = 0
     
+    # ✅ ИСПРАВЛЕНО: используем t['type'] вместо t.type
     for t in transactions:
-        if t.type == 'income':
-            total_income += float(t.amount)
+        if t['type'] == 'income':
+            total_income += float(t['amount'])
         else:
-            total_expense += float(t.amount)
+            total_expense += float(t['amount'])
     
     balance = total_income - total_expense
     
@@ -95,11 +96,12 @@ def _format_all_transactions_context(transactions: list) -> str:
     categories_expense = {}
     categories_income = {}
     
+    # ✅ ИСПРАВЛЕНО: используем t['field'] и t.get('field')
     for t in transactions:
-        amount = float(t.amount)
-        category = t.category_name or "Без категории"
+        amount = float(t['amount'])
+        category = t.get('category_name') or "Без категории"
         
-        if t.type == 'expense':
+        if t['type'] == 'expense':
             categories_expense[category] = categories_expense.get(category, 0) + amount
         else:
             categories_income[category] = categories_income.get(category, 0) + amount
@@ -119,7 +121,8 @@ def _format_all_transactions_context(transactions: list) -> str:
     # ВСЕ категории расходов
     sorted_expenses = sorted(categories_expense.items(), key=lambda x: x[1], reverse=True)
     for category, amount in sorted_expenses:
-        count = sum(1 for t in transactions if t.type == 'expense' and (t.category_name or "Без категории") == category)
+        # ✅ ИСПРАВЛЕНО: используем t['type'] и t.get()
+        count = sum(1 for t in transactions if t['type'] == 'expense' and (t.get('category_name') or "Без категории") == category)
         context += f"- {category}: {amount:,.0f} ₽ ({count} транзакций)\n"
     
     context += f"\n💰 ВСЕ ДОХОДЫ ПО КАТЕГОРИЯМ:\n"
@@ -127,21 +130,33 @@ def _format_all_transactions_context(transactions: list) -> str:
     # ВСЕ категории доходов
     sorted_income = sorted(categories_income.items(), key=lambda x: x[1], reverse=True)
     for category, amount in sorted_income:
-        count = sum(1 for t in transactions if t.type == 'income' and (t.category_name or "Без категории") == category)
+        # ✅ ИСПРАВЛЕНО
+        count = sum(1 for t in transactions if t['type'] == 'income' and (t.get('category_name') or "Без категории") == category)
         context += f"- {category}: {amount:,.0f} ₽ ({count} транзакций)\n"
     
     # ПОЛНЫЙ СПИСОК ВСЕХ ТРАНЗАКЦИЙ
     context += f"\n📝 ПОЛНЫЙ СПИСОК ВСЕХ {total_count} ТРАНЗАКЦИЙ (от новых к старым):\n\n"
     
     for idx, t in enumerate(transactions, 1):
-        date_str = t.transaction_date.strftime('%d.%m.%Y') if hasattr(t.transaction_date, 'strftime') else str(t.transaction_date)
-        type_emoji = "💰" if t.type == 'income' else "💸"
-        type_name = "Доход" if t.type == 'income' else "Расход"
+        # ✅ ИСПРАВЛЕНО: безопасная работа с датой
+        date_obj = t.get('transaction_date')
+        if date_obj:
+            date_str = date_obj.strftime('%d.%m.%Y') if hasattr(date_obj, 'strftime') else str(date_obj)
+        else:
+            date_str = "Нет даты"
         
-        context += f"{idx}. {type_emoji} {date_str} | {type_name} | {t.category_name} | {t.amount:,.0f} ₽"
+        # ✅ ИСПРАВЛЕНО: используем t['type']
+        type_emoji = "💰" if t['type'] == 'income' else "💸"
+        type_name = "Доход" if t['type'] == 'income' else "Расход"
         
-        if t.description:
-            context += f" | {t.description}"
+        category_name = t.get('category_name') or "Без категории"
+        amount = t['amount']
+        
+        context += f"{idx}. {type_emoji} {date_str} | {type_name} | {category_name} | {amount:,.0f} ₽"
+        
+        description = t.get('description')
+        if description:
+            context += f" | {description}"
         
         context += "\n"
     
